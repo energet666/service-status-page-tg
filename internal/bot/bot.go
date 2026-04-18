@@ -35,6 +35,7 @@ func New(cfg config.Config, st *store.Store) (*Bot, error) {
 		admins:   cfg.AdminIDList,
 	}
 	b.registerHandlers()
+	b.syncCommands()
 	return b, nil
 }
 
@@ -71,6 +72,26 @@ func (b *Bot) registerHandlers() {
 	b.bot.Handle("/announce", b.adminOnly(b.handleAnnounce))
 	b.bot.Handle("/resolve", b.adminOnly(b.handleResolve))
 	b.bot.Handle("/list", b.adminOnly(b.handleList))
+}
+
+func (b *Bot) syncCommands() {
+	commands := []tele.Command{
+		{Text: "status", Description: "Обновить статус сервиса"},
+		{Text: "announce", Description: "Опубликовать объявление"},
+		{Text: "resolve", Description: "Закрыть инцидент"},
+		{Text: "list", Description: "Показать последние объявления"},
+		{Text: "help", Description: "Показать справку"},
+	}
+
+	for _, adminID := range b.admins {
+		scope := tele.CommandScope{
+			Type:   tele.CommandScopeChat,
+			ChatID: adminID,
+		}
+		if err := b.bot.SetCommands(commands, scope); err != nil {
+			log.Printf("failed to sync telegram commands for %d: %v", adminID, err)
+		}
+	}
 }
 
 func (b *Bot) adminOnly(next func(tele.Context) error) func(tele.Context) error {
