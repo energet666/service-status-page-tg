@@ -31,7 +31,7 @@ npm run build
 
 ## Local Runtime Notes
 
-- A server may already be running on `http://localhost:8080` from manual smoke tests.
-- If restarting the server fails with `address already in use`, find and stop the old process listening on port 8080.
+- It is OK to start local servers when needed for verification, but stop them immediately after the check is complete.
+- Do not leave long-running dev or backend servers running unless the user explicitly asks for a persistent server.
+- If restarting the server fails with `address already in use`, find and stop the old process listening on the relevant port.
 - `BOT_TOKEN` was not configured during local smoke tests, so Telegram integration was not exercised end to end.
-

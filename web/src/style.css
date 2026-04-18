@@ -1,14 +1,54 @@
 @import "tailwindcss";
 @plugin "daisyui" {
-  themes: light --default, dark --prefersdark;
+  themes: statusdark --default --prefersdark;
+}
+
+@plugin "daisyui/theme" {
+  name: "statusdark";
+  default: true;
+  prefersdark: true;
+  color-scheme: dark;
+
+  --color-base-100: #101214;
+  --color-base-200: #161a1d;
+  --color-base-300: #262c31;
+  --color-base-content: #edf2f4;
+  --color-primary: #18c6a3;
+  --color-primary-content: #041412;
+  --color-secondary: #7dd3fc;
+  --color-secondary-content: #061116;
+  --color-accent: #f5c451;
+  --color-accent-content: #1b1303;
+  --color-neutral: #252b30;
+  --color-neutral-content: #eef3f4;
+  --color-info: #65c7ff;
+  --color-info-content: #061116;
+  --color-success: #35d39b;
+  --color-success-content: #04140f;
+  --color-warning: #f2b84b;
+  --color-warning-content: #1a1103;
+  --color-error: #ff6b6b;
+  --color-error-content: #190707;
+
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.5rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
 }
 
 html {
   scroll-behavior: smooth;
+  background: #101214;
 }
 
 body {
   min-height: 100vh;
+  background:
+    linear-gradient(180deg, rgba(24, 198, 163, 0.08), rgba(16, 18, 20, 0) 28rem),
+    linear-gradient(120deg, rgba(245, 196, 81, 0.05), rgba(16, 18, 20, 0) 34rem),
+    #101214;
 }
 
 button,
@@ -17,3 +57,19 @@ textarea {
   letter-spacing: 0;
 }
 
+.status-shell {
+  background-image:
+    linear-gradient(rgba(237, 242, 244, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(237, 242, 244, 0.035) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.surface-panel {
+  background: rgba(22, 26, 29, 0.78);
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(18px);
+}
+
+.surface-muted {
+  background: rgba(22, 26, 29, 0.58);
+}
