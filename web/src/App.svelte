@@ -2,9 +2,9 @@
   import {
     AlertCircle,
     CheckCircle2,
-    Clock,
     LoaderCircle,
     Megaphone,
+    RefreshCw,
     Send,
     ShieldAlert,
     Wrench
@@ -19,7 +19,8 @@
   let reportFormOpen = $state(false);
   let submitting = $state(false);
   let submitError = $state('');
-  let submitSuccess = $state('');
+  let toastMessage = $state('');
+  let toastTimer;
   let form = $state({
     message: '',
     name: '',
@@ -78,7 +79,6 @@
 
   async function submitReport() {
     submitError = '';
-    submitSuccess = '';
     if (!form.message.trim()) {
       submitError = 'Опишите проблему';
       return;
@@ -94,7 +94,8 @@
         })
       );
       form = { message: '', name: '', contact: '' };
-      submitSuccess = 'Спасибо. Сообщение отправлено администратору.';
+      reportFormOpen = false;
+      showToast('Спасибо. Сообщение отправлено администратору.');
     } catch (error) {
       submitError = error.message || 'Не удалось отправить сообщение';
     } finally {
@@ -108,6 +109,14 @@
       throw new Error(data.error || 'Ошибка запроса');
     }
     return data;
+  }
+
+  function showToast(message) {
+    toastMessage = message;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      toastMessage = '';
+    }, 3500);
   }
 
   function getStatusView(state) {
@@ -161,28 +170,36 @@
 </svelte:head>
 
 <main class="status-shell min-h-screen bg-base-100 text-base-content">
-  <section class="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        <p class="text-sm font-medium text-primary">Статус сервиса</p>
-        <h1 class="mt-2 max-w-3xl text-3xl font-semibold leading-tight text-base-content sm:text-4xl">
-          Проверка доступности и объявления
-        </h1>
+  {#if toastMessage}
+    <div class="toast toast-top toast-center z-50 px-4 pt-4 sm:toast-end">
+      <div class="toast-card alert alert-success rounded-lg shadow-lg" role="status" aria-live="polite">
+        <CheckCircle2 class="size-5" />
+        <span>{toastMessage}</span>
       </div>
-      <button class="btn btn-outline btn-sm rounded-lg border-base-content/20 bg-base-200/70" onclick={loadStatus} disabled={loading}>
-        {#if loading}
-          <LoaderCircle class="size-4 animate-spin" />
-        {:else}
-          <Clock class="size-4" />
-        {/if}
-        Обновить
-      </button>
     </div>
+  {/if}
+
+  <section class="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+    <h1 class="max-w-3xl text-3xl font-semibold leading-tight text-base-content sm:text-4xl">Состояние сервиса</h1>
 
     <div class="flex flex-wrap items-center gap-2 text-sm text-base-content/65">
       <span class={`badge badge-sm border-base-content/10 rounded-lg ${live ? 'badge-success' : 'badge-ghost bg-base-200/70'}`}>
         {live ? 'Автообновление включено' : 'Подключение к автообновлению'}
       </span>
+      <button
+        class="btn btn-ghost btn-square btn-sm rounded-lg border-0 bg-transparent text-base-content/70 shadow-none hover:bg-base-content/10"
+        type="button"
+        aria-label="Обновить статус"
+        title="Обновить статус"
+        onclick={loadStatus}
+        disabled={loading}
+      >
+        {#if loading}
+          <LoaderCircle class="size-4 animate-spin" />
+        {:else}
+          <RefreshCw class="size-4" />
+        {/if}
+      </button>
       {#if realtimeError}
         <span>{realtimeError}</span>
       {/if}
@@ -212,16 +229,16 @@
 
     <div>
       <button
-        class="btn btn-primary rounded-lg"
+        class="btn w-full rounded-lg border-base-content/15 bg-base-200 text-base-content hover:border-base-content/25 hover:bg-base-300 sm:w-auto"
         type="button"
         aria-controls="report-form"
         aria-expanded={reportFormOpen}
         onclick={() => {
-          reportFormOpen = true;
+          reportFormOpen = !reportFormOpen;
         }}
       >
         <Send class="size-4" />
-        Сообщение о проблеме
+        Сообщить о проблеме
       </button>
     </div>
 
@@ -258,12 +275,6 @@
               <div class="alert alert-error rounded-lg py-3">
                 <AlertCircle class="size-5" />
                 <span>{submitError}</span>
-              </div>
-            {/if}
-            {#if submitSuccess}
-              <div class="alert alert-success rounded-lg py-3">
-                <CheckCircle2 class="size-5" />
-                <span>{submitSuccess}</span>
               </div>
             {/if}
 
