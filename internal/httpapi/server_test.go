@@ -2,11 +2,15 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"service-status-page/internal/store"
 )
@@ -39,6 +43,46 @@ func TestGetStatusOnEmptyState(t *testing.T) {
 	if body.Status.State != store.StatusOK {
 		t.Fatalf("state = %q, want %q", body.Status.State, store.StatusOK)
 	}
+}
+
+func TestStatusEventsStreamInitialAndUpdatedState(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	handler := New(st, nil, filepath.Join(t.TempDir(), "dist"))
+	ctx, cancel := context.WithCancel(context.Background())
+	req := httptest.NewRequest(http.MethodGet, "/api/status/events", nil).WithContext(ctx)
+	res := newSSETestWriter()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		handler.ServeHTTP(res, req)
+	}()
+
+	initial := readSSEStatus(t, res)
+	if statusCode := res.statusCode(); statusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", statusCode, http.StatusOK)
+	}
+	if contentType := res.Header().Get("Content-Type"); !strings.HasPrefix(contentType, "text/event-stream") {
+		t.Fatalf("content type = %q, want text/event-stream", contentType)
+	}
+	if initial.Status.State != store.StatusOK {
+		t.Fatalf("initial state = %q, want %q", initial.Status.State, store.StatusOK)
+	}
+
+	if _, err := st.SetStatus(store.StatusIncident, "Проверочный инцидент", "test"); err != nil {
+		t.Fatal(err)
+	}
+
+	updated := readSSEStatus(t, res)
+	if updated.Status.State != store.StatusIncident {
+		t.Fatalf("updated state = %q, want %q", updated.Status.State, store.StatusIncident)
+	}
+
+	cancel()
+	<-done
 }
 
 func TestCreateReport(t *testing.T) {
@@ -94,4 +138,81 @@ func newTestHandler(t *testing.T, notifier ReportNotifier) http.Handler {
 		t.Fatal(err)
 	}
 	return New(st, notifier, filepath.Join(t.TempDir(), "dist"))
+}
+
+type sseTestWriter struct {
+	header http.Header
+	ch     chan string
+
+	mu     sync.Mutex
+	status int
+}
+
+func newSSETestWriter() *sseTestWriter {
+	return &sseTestWriter{
+		header: make(http.Header),
+		ch:     make(chan string, 10),
+	}
+}
+
+func (w *sseTestWriter) Header() http.Header {
+	return w.header
+}
+
+func (w *sseTestWriter) WriteHeader(status int) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.status == 0 {
+		w.status = status
+	}
+}
+
+func (w *sseTestWriter) Write(b []byte) (int, error) {
+	w.ch <- string(b)
+	return len(b), nil
+}
+
+func (w *sseTestWriter) Flush() {}
+
+func (w *sseTestWriter) statusCode() int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.status == 0 {
+		return http.StatusOK
+	}
+	return w.status
+}
+
+func readSSEStatus(t *testing.T, writer *sseTestWriter) struct {
+	Status store.Status `json:"status"`
+} {
+	t.Helper()
+
+	for {
+		var chunk string
+		select {
+		case chunk = <-writer.ch:
+		case <-time.After(time.Second):
+			t.Fatal("timed out waiting for SSE event")
+		}
+
+		dataLine := ""
+		for _, line := range strings.Split(chunk, "\n") {
+			if strings.HasPrefix(line, "data: ") {
+				dataLine = strings.TrimPrefix(line, "data: ")
+				break
+			}
+		}
+		if dataLine == "" {
+			continue
+		}
+
+		var body struct {
+			Status store.Status `json:"status"`
+		}
+		if err := json.Unmarshal([]byte(strings.TrimSpace(dataLine)), &body); err != nil {
+			t.Fatal(err)
+		}
+		return body
+	}
 }

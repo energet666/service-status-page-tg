@@ -63,9 +63,10 @@ type State struct {
 }
 
 type Store struct {
-	path string
-	mu   sync.Mutex
-	data State
+	path        string
+	mu          sync.Mutex
+	data        State
+	subscribers map[chan struct{}]struct{}
 }
 
 func Open(path string) (*Store, error) {
@@ -82,6 +83,26 @@ func (s *Store) Snapshot() State {
 	return cloneState(s.data)
 }
 
+func (s *Store) Subscribe() (<-chan struct{}, func()) {
+	ch := make(chan struct{}, 1)
+
+	s.mu.Lock()
+	if s.subscribers == nil {
+		s.subscribers = make(map[chan struct{}]struct{})
+	}
+	s.subscribers[ch] = struct{}{}
+	s.mu.Unlock()
+
+	unsubscribe := func() {
+		s.mu.Lock()
+		delete(s.subscribers, ch)
+		close(ch)
+		s.mu.Unlock()
+	}
+
+	return ch, unsubscribe
+}
+
 func (s *Store) SetStatus(state StatusState, message, createdBy string) (Announcement, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -96,7 +117,11 @@ func (s *Store) SetStatus(state StatusState, message, createdBy string) (Announc
 		CreatedBy: createdBy,
 	}
 	s.prependAnnouncement(ann)
-	return ann, s.saveLocked()
+	if err := s.saveLocked(); err != nil {
+		return ann, err
+	}
+	s.broadcastLocked()
+	return ann, nil
 }
 
 func (s *Store) Resolve(message, createdBy string) (Announcement, error) {
@@ -113,7 +138,11 @@ func (s *Store) Resolve(message, createdBy string) (Announcement, error) {
 		CreatedBy: createdBy,
 	}
 	s.prependAnnouncement(ann)
-	return ann, s.saveLocked()
+	if err := s.saveLocked(); err != nil {
+		return ann, err
+	}
+	s.broadcastLocked()
+	return ann, nil
 }
 
 func (s *Store) AddAnnouncement(message string, kind AnnouncementKind, createdBy string) (Announcement, error) {
@@ -128,7 +157,11 @@ func (s *Store) AddAnnouncement(message string, kind AnnouncementKind, createdBy
 		CreatedBy: createdBy,
 	}
 	s.prependAnnouncement(ann)
-	return ann, s.saveLocked()
+	if err := s.saveLocked(); err != nil {
+		return ann, err
+	}
+	s.broadcastLocked()
+	return ann, nil
 }
 
 func (s *Store) AddReport(report Report) (Report, error) {
@@ -145,7 +178,11 @@ func (s *Store) AddReport(report Report) (Report, error) {
 	if len(s.data.Reports) > MaxItems {
 		s.data.Reports = s.data.Reports[:MaxItems]
 	}
-	return report, s.saveLocked()
+	if err := s.saveLocked(); err != nil {
+		return report, err
+	}
+	s.broadcastLocked()
+	return report, nil
 }
 
 func (s *Store) MarkReportSent(id string) error {
@@ -155,7 +192,11 @@ func (s *Store) MarkReportSent(id string) error {
 	for i := range s.data.Reports {
 		if s.data.Reports[i].ID == id {
 			s.data.Reports[i].SentToTelegram = true
-			return s.saveLocked()
+			if err := s.saveLocked(); err != nil {
+				return err
+			}
+			s.broadcastLocked()
+			return nil
 		}
 	}
 	return nil
@@ -206,6 +247,15 @@ func (s *Store) prependAnnouncement(ann Announcement) {
 	s.data.Announcements = append([]Announcement{ann}, s.data.Announcements...)
 	if len(s.data.Announcements) > MaxItems {
 		s.data.Announcements = s.data.Announcements[:MaxItems]
+	}
+}
+
+func (s *Store) broadcastLocked() {
+	for ch := range s.subscribers {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
 	}
 }
 

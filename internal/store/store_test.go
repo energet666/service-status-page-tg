@@ -66,3 +66,23 @@ func TestStoreLimitsHistory(t *testing.T) {
 		t.Fatalf("reports = %d, want %d", len(snap.Reports), MaxItems)
 	}
 }
+
+func TestSubscribeReceivesUpdates(t *testing.T) {
+	st, err := Open(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	updates, unsubscribe := st.Subscribe()
+	defer unsubscribe()
+
+	if _, err := st.SetStatus(StatusIncident, "Проверочный инцидент", "test"); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-updates:
+	default:
+		t.Fatal("subscriber did not receive update")
+	}
+}

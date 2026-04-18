@@ -38,21 +38,55 @@ func New(st *store.Store, notifier ReportNotifier, spaDir string) http.Handler {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/status", s.handleStatus)
+	mux.HandleFunc("GET /api/status/events", s.handleStatusEvents)
 	mux.HandleFunc("POST /api/reports", s.handleCreateReport)
 	mux.HandleFunc("/", s.handleSPA)
 	return mux
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
-	snapshot := s.store.Snapshot()
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":        snapshot.Status,
-		"announcements": snapshot.Announcements,
-		"meta": map[string]any{
-			"startedAt":   s.startedAt,
-			"generatedAt": time.Now().UTC(),
-		},
-	})
+	writeJSON(w, http.StatusOK, s.statusResponse())
+}
+
+func (s *Server) handleStatusEvents(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "Streaming is not supported")
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	updates, unsubscribe := s.store.Subscribe()
+	defer unsubscribe()
+
+	if err := writeStatusEvent(w, s.statusResponse()); err != nil {
+		return
+	}
+	flusher.Flush()
+
+	heartbeat := time.NewTicker(30 * time.Second)
+	defer heartbeat.Stop()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-updates:
+			if err := writeStatusEvent(w, s.statusResponse()); err != nil {
+				return
+			}
+			flusher.Flush()
+		case <-heartbeat.C:
+			if _, err := fmt.Fprint(w, ": ping\n\n"); err != nil {
+				return
+			}
+			flusher.Flush()
+		}
+	}
 }
 
 func (s *Server) handleCreateReport(w http.ResponseWriter, r *http.Request) {
@@ -104,6 +138,18 @@ func (s *Server) handleCreateReport(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) statusResponse() map[string]any {
+	snapshot := s.store.Snapshot()
+	return map[string]any{
+		"status":        snapshot.Status,
+		"announcements": snapshot.Announcements,
+		"meta": map[string]any{
+			"startedAt":   s.startedAt,
+			"generatedAt": time.Now().UTC(),
+		},
+	}
+}
+
 func (s *Server) handleSPA(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.URL.Path, "/api/") {
 		writeError(w, http.StatusNotFound, "Not found")
@@ -138,6 +184,15 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
+}
+
+func writeStatusEvent(w http.ResponseWriter, value any) error {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(w, "event: status\ndata: %s\n\n", data)
+	return err
 }
 
 func writeError(w http.ResponseWriter, status int, message string) {

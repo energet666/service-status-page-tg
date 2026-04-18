@@ -14,6 +14,8 @@
   let announcements = $state([]);
   let loading = $state(true);
   let loadError = $state('');
+  let live = $state(false);
+  let realtimeError = $state('');
   let submitting = $state(false);
   let submitError = $state('');
   let submitSuccess = $state('');
@@ -28,6 +30,28 @@
 
   $effect(() => {
     loadStatus();
+    const events = new EventSource('/api/status/events');
+
+    events.addEventListener('status', (event) => {
+      try {
+        applyStatusData(JSON.parse(event.data));
+        live = true;
+        realtimeError = '';
+      } catch {
+        realtimeError = 'Не удалось прочитать обновление статуса';
+      }
+    });
+
+    events.onerror = () => {
+      live = false;
+      if (!status) {
+        realtimeError = 'Автообновление временно недоступно';
+      }
+    };
+
+    return () => {
+      events.close();
+    };
   });
 
   async function loadStatus() {
@@ -36,13 +60,19 @@
     try {
       const response = await fetch('/api/status');
       const data = await readJSON(response);
-      status = data.status;
-      announcements = data.announcements ?? [];
+      applyStatusData(data);
     } catch (error) {
       loadError = error.message || 'Не удалось загрузить статус';
     } finally {
       loading = false;
     }
+  }
+
+  function applyStatusData(data) {
+    status = data.status;
+    announcements = data.announcements ?? [];
+    loading = false;
+    loadError = '';
   }
 
   async function submitReport() {
@@ -141,6 +171,15 @@
         {/if}
         Обновить
       </button>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-2 text-sm text-base-content/60">
+      <span class={`badge badge-sm rounded-lg ${live ? 'badge-success' : 'badge-ghost'}`}>
+        {live ? 'Автообновление включено' : 'Подключение к автообновлению'}
+      </span>
+      {#if realtimeError}
+        <span>{realtimeError}</span>
+      {/if}
     </div>
 
     {#if loadError}
