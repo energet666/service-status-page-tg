@@ -1,0 +1,80 @@
+name: Build release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG: deploy-latest
+  ASSET_NAME: service-status-page-linux-amd64.tar.gz
+
+jobs:
+  build-release:
+    name: Build and publish Linux release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Test backend
+        run: go test ./...
+
+      - name: Install frontend dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: web
+        run: npm run build
+
+      - name: Build Linux binary
+        run: |
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o service-status-page ./cmd/server
+
+      - name: Package release asset
+        run: |
+          mkdir -p release
+          tar -czf "release/${ASSET_NAME}" service-status-page web/dist
+          cd release
+          sha256sum "${ASSET_NAME}" > "${ASSET_NAME}.sha256"
+
+      - name: Move rolling release tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f "${RELEASE_TAG}" "${GITHUB_SHA}"
+          git push origin "refs/tags/${RELEASE_TAG}" --force
+
+      - name: Publish release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTES="Automated deploy build for ${GITHUB_SHA}."
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh release edit "${RELEASE_TAG}" --title "Deploy latest" --notes "${NOTES}" --latest=false
+            gh release upload "${RELEASE_TAG}" "release/${ASSET_NAME}" "release/${ASSET_NAME}.sha256" --clobber
+          else
+            gh release create "${RELEASE_TAG}" "release/${ASSET_NAME}" "release/${ASSET_NAME}.sha256" \
+              --title "Deploy latest" \
+              --notes "${NOTES}" \
+              --latest=false
+          fi
