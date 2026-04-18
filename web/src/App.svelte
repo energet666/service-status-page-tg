@@ -4,11 +4,14 @@
     CheckCircle2,
     LoaderCircle,
     Megaphone,
+    MessageSquareText,
     RefreshCw,
     Send,
     ShieldAlert,
     Wrench
   } from 'lucide-svelte';
+
+  const savedNameKey = 'service-status-page.reportName';
 
   let status = $state(null);
   let announcements = $state([]);
@@ -17,6 +20,7 @@
   let live = $state(false);
   let realtimeError = $state('');
   let reportFormOpen = $state(false);
+  let hideUserMessages = $state(false);
   let submitting = $state(false);
   let submitError = $state('');
   let toastMessage = $state('');
@@ -29,8 +33,10 @@
 
   let statusView = $derived(getStatusView(status?.state));
   let StatusIcon = $derived(statusView.icon);
+  let visibleAnnouncements = $derived(announcements.filter((announcement) => !hideUserMessages || announcement.kind !== 'user'));
 
   $effect(() => {
+    loadSavedName();
     loadStatus();
     const events = new EventSource('/api/status/events');
 
@@ -84,6 +90,7 @@
       return;
     }
 
+    const submittedName = form.name.trim();
     submitting = true;
     try {
       await readJSON(
@@ -93,13 +100,34 @@
           body: JSON.stringify(form)
         })
       );
-      form = { message: '', name: '', contact: '' };
+      saveName(submittedName);
+      form = { message: '', name: submittedName, contact: '' };
       reportFormOpen = false;
       showToast('Спасибо. Сообщение отправлено администратору.');
     } catch (error) {
       submitError = error.message || 'Не удалось отправить сообщение';
     } finally {
       submitting = false;
+    }
+  }
+
+  function loadSavedName() {
+    try {
+      const savedName = localStorage.getItem(savedNameKey);
+      if (savedName && !form.name) {
+        form.name = savedName;
+      }
+    } catch {
+      // Browser storage can be unavailable in private or restricted modes.
+    }
+  }
+
+  function saveName(name) {
+    if (!name) return;
+    try {
+      localStorage.setItem(savedNameKey, name);
+    } catch {
+      // Sending the report is more important than persisting the form default.
     }
   }
 
@@ -158,10 +186,24 @@
   }
 
   function announcementClass(kind) {
+    if (kind === 'user') return 'border-info/45 border-l-info bg-info/5';
     if (kind === 'maintenance') return 'border-warning/45 border-l-warning bg-warning/5';
     if (kind === 'incident') return 'border-error/45 border-l-error bg-error/5';
     if (kind === 'resolved') return 'border-success/45 border-l-success bg-success/5';
     return 'border-base-300/70 border-l-base-content/25';
+  }
+
+  function announcementLabel(kind) {
+    if (kind === 'user') return 'Сообщение пользователя';
+    if (kind === 'maintenance') return 'Обслуживание';
+    if (kind === 'incident') return 'Инцидент';
+    if (kind === 'resolved') return 'Решено';
+    return 'Объявление';
+  }
+
+  function userDisplayName(announcement) {
+    if (announcement.kind !== 'user') return '';
+    return announcement.createdBy && announcement.createdBy !== 'user' ? announcement.createdBy : 'Анонимно';
   }
 </script>
 
@@ -249,6 +291,9 @@
             <Send class="size-5 text-primary" />
             <h2 class="text-2xl font-semibold">Сообщить о баге</h2>
           </div>
+          <p class="mb-4 text-sm leading-relaxed text-base-content/65">
+            Текст сообщения появится в чате статуса. Имя и контакт видны только администратору.
+          </p>
 
           <form class="flex flex-col gap-4" onsubmit={(event) => { event.preventDefault(); submitReport(); }}>
             <label class="flex flex-col gap-2">
@@ -292,9 +337,16 @@
       {/if}
 
       <section class="lg:order-1">
-        <div class="mb-4 flex items-center gap-2">
-          <Megaphone class="size-5 text-accent" />
-          <h2 class="text-2xl font-semibold">Объявления</h2>
+        <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div class="flex items-center gap-2">
+            <Megaphone class="size-5 text-accent" />
+            <h2 class="text-2xl font-semibold">Чат статуса</h2>
+          </div>
+
+          <label class="flex items-center gap-2 text-sm text-base-content/75">
+            <input class="checkbox checkbox-sm rounded border-base-content/25" type="checkbox" bind:checked={hideUserMessages} />
+            <span>Скрыть сообщения пользователей</span>
+          </label>
         </div>
 
         {#if loading && announcements.length === 0}
@@ -303,14 +355,31 @@
           </div>
         {:else if announcements.length === 0}
           <div class="surface-muted rounded-lg border border-base-content/10 p-5 text-base-content/70">
-            Объявлений пока нет.
+            Сообщений пока нет.
+          </div>
+        {:else if visibleAnnouncements.length === 0}
+          <div class="surface-muted rounded-lg border border-base-content/10 p-5 text-base-content/70">
+            Пользовательские сообщения скрыты.
           </div>
         {:else}
           <div class="space-y-3">
-            {#each announcements as announcement}
+            {#each visibleAnnouncements as announcement}
               <article class={`surface-muted rounded-lg border border-l-4 p-4 ${announcementClass(announcement.kind)}`}>
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <p class="leading-relaxed">{announcement.message}</p>
+                  <div class="min-w-0">
+                    <div class="mb-2 flex flex-wrap items-center gap-2">
+                      {#if announcement.kind === 'user'}
+                        <MessageSquareText class="size-4 text-info" />
+                      {/if}
+                      <span class={`badge badge-sm rounded-lg ${announcement.kind === 'user' ? 'badge-info' : 'badge-ghost'}`}>
+                        {announcementLabel(announcement.kind)}
+                      </span>
+                      {#if announcement.kind === 'user'}
+                        <span class="text-sm font-medium text-base-content/65">{userDisplayName(announcement)}</span>
+                      {/if}
+                    </div>
+                    <p class="leading-relaxed">{announcement.message}</p>
+                  </div>
                   <time class="shrink-0 text-sm text-base-content/60">{formatDate(announcement.createdAt)}</time>
                 </div>
               </article>

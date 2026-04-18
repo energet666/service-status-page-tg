@@ -67,6 +67,40 @@ func TestStoreLimitsHistory(t *testing.T) {
 	}
 }
 
+func TestAddReportAddsUserAnnouncement(t *testing.T) {
+	st, err := Open(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := st.AddReport(Report{
+		Message: "Не открывается страница оплаты",
+		Name:    "Анна",
+		Contact: "@anna",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	snap := st.Snapshot()
+	if len(snap.Announcements) != 1 {
+		t.Fatalf("announcements = %d, want 1", len(snap.Announcements))
+	}
+	ann := snap.Announcements[0]
+	if ann.ID != report.ID {
+		t.Fatalf("announcement ID = %q, want report ID %q", ann.ID, report.ID)
+	}
+	if ann.Kind != AnnouncementUser {
+		t.Fatalf("announcement kind = %q, want %q", ann.Kind, AnnouncementUser)
+	}
+	if ann.Message != report.Message {
+		t.Fatalf("announcement message = %q, want %q", ann.Message, report.Message)
+	}
+	if ann.CreatedBy != report.Name {
+		t.Fatalf("announcement createdBy = %q, want %q", ann.CreatedBy, report.Name)
+	}
+}
+
 func TestSubscribeReceivesUpdates(t *testing.T) {
 	st, err := Open(filepath.Join(t.TempDir(), "state.json"))
 	if err != nil {

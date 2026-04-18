@@ -102,6 +102,44 @@ func TestCreateReport(t *testing.T) {
 	}
 }
 
+func TestCreateReportAddsUserAnnouncementToStatus(t *testing.T) {
+	handler := newTestHandler(t, nil)
+	createReq := httptest.NewRequest(http.MethodPost, "/api/reports", bytes.NewBufferString(`{"message":"Кнопка не работает","name":"Анна","contact":"@anna"}`))
+	createReq.RemoteAddr = "192.0.2.10:1234"
+	createRes := httptest.NewRecorder()
+	handler.ServeHTTP(createRes, createReq)
+	if createRes.Code != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d: %s", createRes.Code, http.StatusCreated, createRes.Body.String())
+	}
+
+	statusReq := httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	statusRes := httptest.NewRecorder()
+	handler.ServeHTTP(statusRes, statusReq)
+	if statusRes.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", statusRes.Code, http.StatusOK)
+	}
+
+	var body struct {
+		Announcements []store.Announcement `json:"announcements"`
+	}
+	if err := json.NewDecoder(statusRes.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Announcements) != 1 {
+		t.Fatalf("announcements = %d, want 1", len(body.Announcements))
+	}
+	ann := body.Announcements[0]
+	if ann.Kind != store.AnnouncementUser {
+		t.Fatalf("announcement kind = %q, want %q", ann.Kind, store.AnnouncementUser)
+	}
+	if ann.Message != "Кнопка не работает" {
+		t.Fatalf("announcement message = %q", ann.Message)
+	}
+	if ann.CreatedBy != "Анна" {
+		t.Fatalf("announcement createdBy = %q, want Анна", ann.CreatedBy)
+	}
+}
+
 func TestCreateReportRequiresMessage(t *testing.T) {
 	handler := newTestHandler(t, nil)
 	req := httptest.NewRequest(http.MethodPost, "/api/reports", bytes.NewBufferString(`{"message":" "}`))

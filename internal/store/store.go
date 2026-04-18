@@ -29,6 +29,7 @@ const (
 	AnnouncementMaintenance AnnouncementKind = "maintenance"
 	AnnouncementIncident    AnnouncementKind = "incident"
 	AnnouncementResolved    AnnouncementKind = "resolved"
+	AnnouncementUser        AnnouncementKind = "user"
 )
 
 type Status struct {
@@ -174,10 +175,21 @@ func (s *Store) AddReport(report Report) (Report, error) {
 	if report.CreatedAt.IsZero() {
 		report.CreatedAt = time.Now().UTC()
 	}
+	createdBy := report.Name
+	if createdBy == "" {
+		createdBy = "user"
+	}
 	s.data.Reports = append([]Report{report}, s.data.Reports...)
 	if len(s.data.Reports) > MaxItems {
 		s.data.Reports = s.data.Reports[:MaxItems]
 	}
+	s.prependAnnouncement(Announcement{
+		ID:        report.ID,
+		Message:   report.Message,
+		Kind:      AnnouncementUser,
+		CreatedAt: report.CreatedAt,
+		CreatedBy: createdBy,
+	})
 	if err := s.saveLocked(); err != nil {
 		return report, err
 	}
