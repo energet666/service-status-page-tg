@@ -20,7 +20,9 @@ If `BOT_TOKEN` is empty, the HTTP server still runs and Telegram integration is 
 ## Telegram commands
 
 ```text
-/status ok|maintenance|incident текст статуса
+/ok [текст статуса]
+/maintenance [текст статуса]
+/incident [текст статуса]
 /announce текст объявления
 /resolve текст восстановления
 /list
@@ -28,4 +30,3 @@ If `BOT_TOKEN` is empty, the HTTP server still runs and Telegram integration is 
 ```
 
 Only Telegram user ids from `ADMIN_IDS` can use admin commands.
-

@@ -12,6 +12,12 @@ import (
 	"service-status-page/internal/store"
 )
 
+const (
+	defaultOKStatusMessage          = "Сервис работает штатно"
+	defaultMaintenanceStatusMessage = "Сервис временно на техническом обслуживании"
+	defaultIncidentStatusMessage    = "В работе сервиса наблюдаются проблемы"
+)
+
 type Bot struct {
 	bot      *tele.Bot
 	store    *store.Store
@@ -68,7 +74,9 @@ func (b *Bot) registerHandlers() {
 	b.bot.Handle("/help", b.adminOnly(func(c tele.Context) error {
 		return c.Send(helpText())
 	}))
-	b.bot.Handle("/status", b.adminOnly(b.handleStatus))
+	b.bot.Handle("/ok", b.adminOnly(b.handleStatus(store.StatusOK, "/ok", defaultOKStatusMessage)))
+	b.bot.Handle("/maintenance", b.adminOnly(b.handleStatus(store.StatusMaintenance, "/maintenance", defaultMaintenanceStatusMessage)))
+	b.bot.Handle("/incident", b.adminOnly(b.handleStatus(store.StatusIncident, "/incident", defaultIncidentStatusMessage)))
 	b.bot.Handle("/announce", b.adminOnly(b.handleAnnounce))
 	b.bot.Handle("/resolve", b.adminOnly(b.handleResolve))
 	b.bot.Handle("/list", b.adminOnly(b.handleList))
@@ -76,7 +84,9 @@ func (b *Bot) registerHandlers() {
 
 func (b *Bot) syncCommands() {
 	commands := []tele.Command{
-		{Text: "status", Description: "Обновить статус сервиса"},
+		{Text: "ok", Description: "Сообщить, что сервис работает"},
+		{Text: "maintenance", Description: "Сообщить о техработах"},
+		{Text: "incident", Description: "Сообщить об инциденте"},
 		{Text: "announce", Description: "Опубликовать объявление"},
 		{Text: "resolve", Description: "Закрыть инцидент"},
 		{Text: "list", Description: "Показать последние объявления"},
@@ -104,15 +114,17 @@ func (b *Bot) adminOnly(next func(tele.Context) error) func(tele.Context) error 
 	}
 }
 
-func (b *Bot) handleStatus(c tele.Context) error {
-	state, message, err := ParseStatusCommand(c.Message().Payload)
-	if err != nil {
-		return c.Send(err.Error())
+func (b *Bot) handleStatus(state store.StatusState, command string, defaultMessage ...string) func(tele.Context) error {
+	return func(c tele.Context) error {
+		message, err := ParseStatusMessage(c.Message().Payload, command, defaultMessage...)
+		if err != nil {
+			return c.Send(err.Error())
+		}
+		if _, err := b.store.SetStatus(state, message, adminName(c.Sender())); err != nil {
+			return c.Send("Не удалось сохранить статус.")
+		}
+		return c.Send("Статус обновлен.")
 	}
-	if _, err := b.store.SetStatus(state, message, adminName(c.Sender())); err != nil {
-		return c.Send("Не удалось сохранить статус.")
-	}
-	return c.Send("Статус обновлен.")
 }
 
 func (b *Bot) handleAnnounce(c tele.Context) error {
@@ -159,29 +171,22 @@ func IsAdmin(id int64, admins map[int64]struct{}) bool {
 	return ok
 }
 
-func ParseStatusCommand(payload string) (store.StatusState, string, error) {
-	fields := strings.Fields(strings.TrimSpace(payload))
-	if len(fields) < 2 {
-		return "", "", fmt.Errorf("Использование: /status ok|maintenance|incident текст статуса")
-	}
-
-	state := store.StatusState(fields[0])
-	switch state {
-	case store.StatusOK, store.StatusMaintenance, store.StatusIncident:
-	default:
-		return "", "", fmt.Errorf("Неизвестный статус: %s", fields[0])
-	}
-
-	message := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(payload), fields[0]))
+func ParseStatusMessage(payload, command string, defaultMessage ...string) (string, error) {
+	message := strings.TrimSpace(payload)
 	if message == "" {
-		return "", "", fmt.Errorf("Текст статуса не должен быть пустым")
+		if len(defaultMessage) > 0 && strings.TrimSpace(defaultMessage[0]) != "" {
+			return strings.TrimSpace(defaultMessage[0]), nil
+		}
+		return "", fmt.Errorf("Использование: %s текст статуса", command)
 	}
-	return state, message, nil
+	return message, nil
 }
 
 func helpText() string {
 	return strings.Join([]string{
-		"/status ok|maintenance|incident текст",
+		"/ok [текст статуса]",
+		"/maintenance [текст статуса]",
+		"/incident [текст статуса]",
 		"/announce текст объявления",
 		"/resolve текст",
 		"/list",
