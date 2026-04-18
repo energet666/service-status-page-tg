@@ -16,6 +16,7 @@
   let loadError = $state('');
   let live = $state(false);
   let realtimeError = $state('');
+  let reportFormOpen = $state(false);
   let submitting = $state(false);
   let submitError = $state('');
   let submitSuccess = $state('');
@@ -206,8 +207,77 @@
       </div>
     </section>
 
-    <div class="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
-      <section>
+    <div>
+      <button
+        class="btn btn-primary rounded-lg"
+        type="button"
+        aria-controls="report-form"
+        aria-expanded={reportFormOpen}
+        onclick={() => {
+          reportFormOpen = true;
+        }}
+      >
+        <Send class="size-4" />
+        Сообщение о проблеме
+      </button>
+    </div>
+
+    <div class={reportFormOpen ? 'grid gap-8 lg:grid-cols-[1.2fr_0.8fr]' : 'grid gap-8'}>
+      {#if reportFormOpen}
+        <section id="report-form" class="rounded-lg border border-base-300 p-5 lg:order-2">
+          <div class="mb-4 flex items-center gap-2">
+            <Send class="size-5" />
+            <h2 class="text-2xl font-semibold">Сообщить о баге</h2>
+          </div>
+
+          <form class="flex flex-col gap-4" onsubmit={(event) => { event.preventDefault(); submitReport(); }}>
+            <label class="flex flex-col gap-2">
+              <span class="text-sm font-medium text-base-content/75">Что случилось</span>
+              <textarea
+                class="textarea textarea-bordered min-h-32 w-full rounded-lg"
+                bind:value={form.message}
+                placeholder="Опишите проблему"
+                maxlength="4000"
+              ></textarea>
+            </label>
+
+            <label class="flex flex-col gap-2">
+              <span class="text-sm font-medium text-base-content/75">Имя</span>
+              <input class="input input-bordered w-full rounded-lg" bind:value={form.name} placeholder="Необязательно" maxlength="120" />
+            </label>
+
+            <label class="flex flex-col gap-2">
+              <span class="text-sm font-medium text-base-content/75">Контакт</span>
+              <input class="input input-bordered w-full rounded-lg" bind:value={form.contact} placeholder="Email или Telegram, необязательно" maxlength="200" />
+            </label>
+
+            {#if submitError}
+              <div class="alert alert-error rounded-lg py-3">
+                <AlertCircle class="size-5" />
+                <span>{submitError}</span>
+              </div>
+            {/if}
+            {#if submitSuccess}
+              <div class="alert alert-success rounded-lg py-3">
+                <CheckCircle2 class="size-5" />
+                <span>{submitSuccess}</span>
+              </div>
+            {/if}
+
+            <button class="btn btn-primary w-full rounded-lg" type="submit" disabled={submitting}>
+              {#if submitting}
+                <LoaderCircle class="size-4 animate-spin" />
+                Отправка
+              {:else}
+                <Send class="size-4" />
+                Отправить
+              {/if}
+            </button>
+          </form>
+        </section>
+      {/if}
+
+      <section class="lg:order-1">
         <div class="mb-4 flex items-center gap-2">
           <Megaphone class="size-5" />
           <h2 class="text-2xl font-semibold">Объявления</h2>
@@ -233,58 +303,6 @@
             {/each}
           </div>
         {/if}
-      </section>
-
-      <section class="rounded-lg border border-base-300 p-5">
-        <div class="mb-4 flex items-center gap-2">
-          <Send class="size-5" />
-          <h2 class="text-2xl font-semibold">Сообщить о баге</h2>
-        </div>
-
-        <form class="flex flex-col gap-4" onsubmit={(event) => { event.preventDefault(); submitReport(); }}>
-          <label class="flex flex-col gap-2">
-            <span class="text-sm font-medium text-base-content/75">Что случилось</span>
-            <textarea
-              class="textarea textarea-bordered min-h-32 w-full rounded-lg"
-              bind:value={form.message}
-              placeholder="Опишите проблему"
-              maxlength="4000"
-            ></textarea>
-          </label>
-
-          <label class="flex flex-col gap-2">
-            <span class="text-sm font-medium text-base-content/75">Имя</span>
-            <input class="input input-bordered w-full rounded-lg" bind:value={form.name} placeholder="Необязательно" maxlength="120" />
-          </label>
-
-          <label class="flex flex-col gap-2">
-            <span class="text-sm font-medium text-base-content/75">Контакт</span>
-            <input class="input input-bordered w-full rounded-lg" bind:value={form.contact} placeholder="Email или Telegram, необязательно" maxlength="200" />
-          </label>
-
-          {#if submitError}
-            <div class="alert alert-error rounded-lg py-3">
-              <AlertCircle class="size-5" />
-              <span>{submitError}</span>
-            </div>
-          {/if}
-          {#if submitSuccess}
-            <div class="alert alert-success rounded-lg py-3">
-              <CheckCircle2 class="size-5" />
-              <span>{submitSuccess}</span>
-            </div>
-          {/if}
-
-          <button class="btn btn-primary w-full rounded-lg" type="submit" disabled={submitting}>
-            {#if submitting}
-              <LoaderCircle class="size-4 animate-spin" />
-              Отправка
-            {:else}
-              <Send class="size-4" />
-              Отправить
-            {/if}
-          </button>
-        </form>
       </section>
     </div>
   </section>
