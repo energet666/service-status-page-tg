@@ -284,7 +284,7 @@
       </button>
     </div>
 
-    <div class={reportFormOpen ? 'grid gap-8 lg:grid-cols-[1.2fr_0.8fr]' : 'grid gap-8'}>
+    <div class={reportFormOpen ? 'grid gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-start' : 'grid gap-8'}>
       {#if reportFormOpen}
         <section id="report-form" class="surface-panel rounded-lg border border-base-content/10 p-5 lg:order-2">
           <div class="mb-4 flex items-center gap-2">
