@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"service-status-page/internal/store"
@@ -25,15 +26,19 @@ type Server struct {
 	spaDir    string
 	limiter   *rateLimiter
 	startedAt time.Time
+	mux       *http.ServeMux
+	done      chan struct{}
+	doneOnce  sync.Once
 }
 
-func New(st *store.Store, notifier ReportNotifier, spaDir string) http.Handler {
+func New(st *store.Store, notifier ReportNotifier, spaDir string) *Server {
 	s := &Server{
 		store:     st,
 		notifier:  notifier,
 		spaDir:    spaDir,
 		limiter:   newRateLimiter(5, 10*time.Minute),
 		startedAt: time.Now().UTC(),
+		done:      make(chan struct{}),
 	}
 
 	mux := http.NewServeMux()
@@ -41,7 +46,18 @@ func New(st *store.Store, notifier ReportNotifier, spaDir string) http.Handler {
 	mux.HandleFunc("GET /api/status/events", s.handleStatusEvents)
 	mux.HandleFunc("POST /api/reports", s.handleCreateReport)
 	mux.HandleFunc("/", s.handleSPA)
-	return mux
+	s.mux = mux
+	return s
+}
+
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.mux.ServeHTTP(w, r)
+}
+
+func (s *Server) Shutdown() {
+	s.doneOnce.Do(func() {
+		close(s.done)
+	})
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
@@ -74,6 +90,8 @@ func (s *Server) handleStatusEvents(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case <-r.Context().Done():
+			return
+		case <-s.done:
 			return
 		case <-updates:
 			if err := writeStatusEvent(w, s.statusResponse()); err != nil {

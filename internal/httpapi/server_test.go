@@ -85,6 +85,31 @@ func TestStatusEventsStreamInitialAndUpdatedState(t *testing.T) {
 	<-done
 }
 
+func TestStatusEventsStopOnServerShutdown(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	handler := New(st, nil, filepath.Join(t.TempDir(), "dist"))
+	req := httptest.NewRequest(http.MethodGet, "/api/status/events", nil)
+	res := newSSETestWriter()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		handler.ServeHTTP(res, req)
+	}()
+
+	readSSEStatus(t, res)
+	handler.Shutdown()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for SSE handler to stop")
+	}
+}
+
 func TestCreateReport(t *testing.T) {
 	notifier := &fakeNotifier{}
 	handler := newTestHandler(t, notifier)
