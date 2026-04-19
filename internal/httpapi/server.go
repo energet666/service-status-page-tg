@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -13,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"service-status-page/internal/checks"
 	"service-status-page/internal/store"
 )
 
@@ -20,9 +22,14 @@ type ReportNotifier interface {
 	NotifyReport(store.Report) error
 }
 
+type AvailabilityChecker interface {
+	Check(context.Context) []checks.Result
+}
+
 type Server struct {
 	store     *store.Store
 	notifier  ReportNotifier
+	checker   AvailabilityChecker
 	spaDir    string
 	limiter   *rateLimiter
 	startedAt time.Time
@@ -31,10 +38,11 @@ type Server struct {
 	doneOnce  sync.Once
 }
 
-func New(st *store.Store, notifier ReportNotifier, spaDir string) *Server {
+func New(st *store.Store, notifier ReportNotifier, checker AvailabilityChecker, spaDir string) *Server {
 	s := &Server{
 		store:     st,
 		notifier:  notifier,
+		checker:   checker,
 		spaDir:    spaDir,
 		limiter:   newRateLimiter(5, 10*time.Minute),
 		startedAt: time.Now().UTC(),
@@ -44,6 +52,7 @@ func New(st *store.Store, notifier ReportNotifier, spaDir string) *Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/status", s.handleStatus)
 	mux.HandleFunc("GET /api/status/events", s.handleStatusEvents)
+	mux.HandleFunc("GET /api/checks", s.handleChecks)
 	mux.HandleFunc("POST /api/reports", s.handleCreateReport)
 	mux.HandleFunc("/", s.handleSPA)
 	s.mux = mux
@@ -62,6 +71,25 @@ func (s *Server) Shutdown() {
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.statusResponse())
+}
+
+func (s *Server) handleChecks(w http.ResponseWriter, r *http.Request) {
+	if s.checker == nil {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"targets": []checks.Result{},
+			"meta": map[string]any{
+				"generatedAt": time.Now().UTC(),
+			},
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"targets": s.checker.Check(r.Context()),
+		"meta": map[string]any{
+			"generatedAt": time.Now().UTC(),
+		},
+	})
 }
 
 func (s *Server) handleStatusEvents(w http.ResponseWriter, r *http.Request) {

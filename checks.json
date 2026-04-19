@@ -1,0 +1,16 @@
+{
+  "targets": [
+    {
+      "name": "YouTube",
+      "url": "https://www.youtube.com/"
+    },
+    {
+      "name": "Instagram",
+      "url": "https://www.instagram.com/"
+    },
+    {
+      "name": "Telegram",
+      "url": "https://web.telegram.org/"
+    }
+  ]
+}

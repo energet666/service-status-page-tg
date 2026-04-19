@@ -14,6 +14,7 @@ type Config struct {
 	AdminIDList   []int64
 	PublicBaseURL string
 	DataFile      string
+	ChecksFile    string
 }
 
 func Load() (Config, error) {
@@ -22,6 +23,7 @@ func Load() (Config, error) {
 		BotToken:      os.Getenv("BOT_TOKEN"),
 		PublicBaseURL: value("PUBLIC_BASE_URL", "http://localhost:8080"),
 		DataFile:      value("DATA_FILE", "data/state.json"),
+		ChecksFile:    value("CHECKS_FILE", "checks.json"),
 		AdminIDs:      map[int64]struct{}{},
 	}
 

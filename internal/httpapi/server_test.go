@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"service-status-page/internal/checks"
 	"service-status-page/internal/store"
 )
 
@@ -22,6 +23,14 @@ type fakeNotifier struct {
 func (f *fakeNotifier) NotifyReport(report store.Report) error {
 	f.reports = append(f.reports, report)
 	return nil
+}
+
+type fakeChecker struct {
+	results []checks.Result
+}
+
+func (f fakeChecker) Check(context.Context) []checks.Result {
+	return f.results
 }
 
 func TestGetStatusOnEmptyState(t *testing.T) {
@@ -51,7 +60,7 @@ func TestStatusEventsStreamInitialAndUpdatedState(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	handler := New(st, nil, filepath.Join(t.TempDir(), "dist"))
+	handler := New(st, nil, nil, filepath.Join(t.TempDir(), "dist"))
 	ctx, cancel := context.WithCancel(context.Background())
 	req := httptest.NewRequest(http.MethodGet, "/api/status/events", nil).WithContext(ctx)
 	res := newSSETestWriter()
@@ -91,7 +100,7 @@ func TestStatusEventsStopOnServerShutdown(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	handler := New(st, nil, filepath.Join(t.TempDir(), "dist"))
+	handler := New(st, nil, nil, filepath.Join(t.TempDir(), "dist"))
 	req := httptest.NewRequest(http.MethodGet, "/api/status/events", nil)
 	res := newSSETestWriter()
 	done := make(chan struct{})
@@ -194,13 +203,60 @@ func TestCreateReportRateLimit(t *testing.T) {
 	}
 }
 
+func TestGetChecks(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkedAt := time.Date(2026, 4, 19, 10, 0, 0, 0, time.UTC)
+	handler := New(st, nil, fakeChecker{results: []checks.Result{
+		{
+			Name:       "Example",
+			URL:        "https://example.com/",
+			State:      checks.StateUp,
+			LatencyMs:  42,
+			StatusCode: http.StatusOK,
+			CheckedAt:  checkedAt,
+		},
+	}}, filepath.Join(t.TempDir(), "dist"))
+	req := httptest.NewRequest(http.MethodGet, "/api/checks", nil)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", res.Code, http.StatusOK, res.Body.String())
+	}
+	var body struct {
+		Targets []checks.Result `json:"targets"`
+		Meta    struct {
+			GeneratedAt time.Time `json:"generatedAt"`
+		} `json:"meta"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Targets) != 1 {
+		t.Fatalf("targets = %d, want 1", len(body.Targets))
+	}
+	if body.Targets[0].Name != "Example" {
+		t.Fatalf("target name = %q, want Example", body.Targets[0].Name)
+	}
+	if body.Targets[0].LatencyMs != 42 {
+		t.Fatalf("latency = %d, want 42", body.Targets[0].LatencyMs)
+	}
+	if body.Meta.GeneratedAt.IsZero() {
+		t.Fatal("generatedAt is zero")
+	}
+}
+
 func newTestHandler(t *testing.T, notifier ReportNotifier) http.Handler {
 	t.Helper()
 	st, err := store.Open(filepath.Join(t.TempDir(), "state.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	return New(st, notifier, filepath.Join(t.TempDir(), "dist"))
+	return New(st, notifier, nil, filepath.Join(t.TempDir(), "dist"))
 }
 
 type sseTestWriter struct {

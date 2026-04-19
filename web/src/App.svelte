@@ -1,7 +1,9 @@
 <script>
   import {
     AlertCircle,
+    ChevronDown,
     CheckCircle2,
+    Globe2,
     LoaderCircle,
     Megaphone,
     MessageSquareText,
@@ -12,11 +14,17 @@
   } from 'lucide-svelte';
 
   const savedNameKey = 'service-status-page.reportName';
+  const checksOpenKey = 'service-status-page.checksOpen';
 
   let status = $state(null);
   let announcements = $state([]);
   let loading = $state(true);
   let loadError = $state('');
+  let checkTargets = $state([]);
+  let checksLoading = $state(true);
+  let checksError = $state('');
+  let checksGeneratedAt = $state('');
+  let checksOpen = $state(true);
   let live = $state(false);
   let realtimeError = $state('');
   let reportFormOpen = $state(false);
@@ -37,7 +45,9 @@
 
   $effect(() => {
     loadSavedName();
+    loadChecksOpen();
     loadStatus();
+    loadChecks();
     const events = new EventSource('/api/status/events');
 
     events.addEventListener('status', (event) => {
@@ -83,6 +93,21 @@
     loadError = '';
   }
 
+  async function loadChecks() {
+    checksLoading = true;
+    checksError = '';
+    try {
+      const response = await fetch('/api/checks');
+      const data = await readJSON(response);
+      checkTargets = data.targets ?? [];
+      checksGeneratedAt = data.meta?.generatedAt ?? '';
+    } catch (error) {
+      checksError = error.message || 'Не удалось проверить адреса';
+    } finally {
+      checksLoading = false;
+    }
+  }
+
   async function submitReport() {
     submitError = '';
     if (!form.message.trim()) {
@@ -119,6 +144,26 @@
       }
     } catch {
       // Browser storage can be unavailable in private or restricted modes.
+    }
+  }
+
+  function loadChecksOpen() {
+    try {
+      const savedValue = localStorage.getItem(checksOpenKey);
+      if (savedValue !== null) {
+        checksOpen = savedValue === 'true';
+      }
+    } catch {
+      // Browser storage can be unavailable in private or restricted modes.
+    }
+  }
+
+  function toggleChecksOpen() {
+    checksOpen = !checksOpen;
+    try {
+      localStorage.setItem(checksOpenKey, String(checksOpen));
+    } catch {
+      // The UI state can still change even if it cannot be persisted.
     }
   }
 
@@ -173,6 +218,36 @@
       tone: 'text-success',
       icon: CheckCircle2
     };
+  }
+
+  function getCheckView(state) {
+    if (state === 'up') {
+      return {
+        title: 'Доступен',
+        badge: 'badge-success',
+        border: 'border-success/35',
+        tone: 'text-success'
+      };
+    }
+    if (state === 'http_error') {
+      return {
+        title: 'HTTP ошибка',
+        badge: 'badge-warning',
+        border: 'border-warning/35',
+        tone: 'text-warning'
+      };
+    }
+    return {
+      title: 'Недоступен',
+      badge: 'badge-error',
+      border: 'border-error/35',
+      tone: 'text-error'
+    };
+  }
+
+  function formatLatency(value) {
+    if (typeof value !== 'number' || value < 0) return '';
+    return `${value} мс`;
   }
 
   function formatDate(value) {
@@ -267,6 +342,98 @@
           {/if}
         </div>
       </div>
+    </section>
+
+    <section class="surface-panel rounded-lg border border-base-content/10 p-5 sm:p-6">
+      <div class={checksOpen ? 'mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between' : 'flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'}>
+        <button
+          class="flex min-w-0 items-center gap-2 rounded-lg text-left text-base-content hover:text-secondary"
+          type="button"
+          aria-controls="availability-checks"
+          aria-expanded={checksOpen}
+          onclick={toggleChecksOpen}
+        >
+          <Globe2 class="size-5 shrink-0 text-secondary" />
+          <span class="text-2xl font-semibold">Проверка доступности</span>
+          <ChevronDown class={`size-5 shrink-0 transition-transform ${checksOpen ? 'rotate-180' : ''}`} />
+        </button>
+
+        <div class="flex flex-wrap items-center gap-2">
+          {#if checksGeneratedAt}
+            <span class="text-sm text-base-content/55">Обновлено {formatDate(checksGeneratedAt)}</span>
+          {/if}
+          {#if checksOpen}
+            <button
+              class="btn btn-sm rounded-lg border-base-content/15 bg-base-200 text-base-content hover:border-base-content/25 hover:bg-base-300"
+              type="button"
+              onclick={loadChecks}
+              disabled={checksLoading}
+            >
+              {#if checksLoading}
+                <LoaderCircle class="size-4 animate-spin" />
+                Проверка
+              {:else}
+                <RefreshCw class="size-4" />
+                Проверить
+              {/if}
+            </button>
+          {/if}
+        </div>
+      </div>
+
+      {#if checksOpen}
+        <div id="availability-checks">
+          {#if checksError}
+            <div class="alert alert-error rounded-lg">
+              <AlertCircle class="size-5" />
+              <span>{checksError}</span>
+            </div>
+          {:else if checksLoading && checkTargets.length === 0}
+            <div class="surface-muted flex min-h-28 items-center justify-center rounded-lg border border-base-content/10">
+              <LoaderCircle class="size-6 animate-spin" />
+            </div>
+          {:else if checkTargets.length === 0}
+            <div class="surface-muted rounded-lg border border-base-content/10 p-4 text-base-content/70">
+              Адреса для проверки не настроены.
+            </div>
+          {:else}
+            <div class="grid gap-3 md:grid-cols-2">
+              {#each checkTargets as target}
+                {@const checkView = getCheckView(target.state)}
+                <article class={`surface-muted rounded-lg border p-4 ${checkView.border}`}>
+                  <div class="flex flex-col gap-3">
+                    <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div class="min-w-0">
+                        <h3 class="font-semibold leading-snug">{target.name}</h3>
+                        <a class="break-all text-sm text-base-content/65 hover:text-secondary" href={target.url} target="_blank" rel="noreferrer">
+                          {target.url}
+                        </a>
+                      </div>
+                      <span class={`badge shrink-0 rounded-lg ${checkView.badge}`}>{checkView.title}</span>
+                    </div>
+
+                    <div class="flex flex-wrap gap-x-4 gap-y-1 text-sm text-base-content/70">
+                      {#if formatLatency(target.latencyMs)}
+                        <span>Задержка {formatLatency(target.latencyMs)}</span>
+                      {/if}
+                      {#if target.statusCode}
+                        <span>HTTP {target.statusCode}</span>
+                      {/if}
+                      {#if target.checkedAt}
+                        <span>Проверено {formatDate(target.checkedAt)}</span>
+                      {/if}
+                    </div>
+
+                    {#if target.error}
+                      <p class={`text-sm leading-relaxed ${checkView.tone}`}>{target.error}</p>
+                    {/if}
+                  </div>
+                </article>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
     </section>
 
     <div>

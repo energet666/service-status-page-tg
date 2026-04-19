@@ -17,6 +17,9 @@ cd web
 npm run build
 ```
 
+- The status page now includes server-side web address availability checks through `GET /api/checks`.
+- Availability targets are read from `CHECKS_FILE`, defaulting to `checks.json`.
+
 ## Decisions
 
 - Use Telegram long polling, not webhooks.
@@ -24,10 +27,14 @@ npm run build
 - Use JSON storage instead of a database.
 - Serve built frontend from `web/dist` through the Go server.
 - Keep bug reports unauthenticated, with in-memory IP rate limiting.
+- Keep availability check results live-only; do not persist them in `data/state.json`.
+- Use HTTP(S) GET from the Go server for availability checks, not browser-side checks or ICMP ping.
+- Store the availability panel open/closed state in browser `localStorage`.
 
 ## Recent Fixes
 
 - The bug report form initially rendered labels and fields in a broken horizontal layout because daisyUI 5 did not apply the expected `form-control` behavior. It was fixed in `web/src/App.svelte` by using explicit `flex flex-col gap-*` layout classes and `w-full` on fields.
+- The availability checks block was added to `web/src/App.svelte` and then made collapsible with persisted browser state.
 
 ## Local Runtime Notes
 

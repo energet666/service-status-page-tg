@@ -6,6 +6,7 @@ This is a small service status page:
 
 - Backend: Go, standard `net/http`, `github.com/joho/godotenv`, `gopkg.in/telebot.v4`.
 - Storage: JSON file, default `data/state.json`, with atomic temp-file write + rename.
+- Availability checks: JSON config file, default `checks.json`, configured by `CHECKS_FILE`.
 - Frontend: Vite + Svelte 5 runes, Tailwind CSS 4, daisyUI 5, `lucide-svelte`.
 - Production shape: one Go process serves `/api/*`, static files from `web/dist`, and the Telegram bot.
 
@@ -40,12 +41,13 @@ If `BOT_TOKEN` is empty, the HTTP server still starts and Telegram integration i
 - Do not introduce a database for the current scale; use the JSON store unless requirements change.
 - API errors should remain JSON: `{ "error": "..." }`.
 - Keep public API routes under `/api`.
+- Keep availability checks live-only; do not store probe results in `data/state.json`.
 - Build the frontend before expecting Go to serve updated UI assets.
 - Do not commit `.env`, `data/`, `web/dist/`, or `web/node_modules/`.
 
 ## UX Notes
 
 - The first screen is the working status page, not a landing page.
+- The availability checks block is collapsible and its open/closed state is stored in browser memory.
 - The bug report form should remain visually aligned as a vertical form.
 - Prefer explicit Tailwind layout classes over relying on daisyUI helper classes when alignment matters.
-

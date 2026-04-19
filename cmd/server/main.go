@@ -13,6 +13,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"service-status-page/internal/bot"
+	"service-status-page/internal/checks"
 	"service-status-page/internal/config"
 	"service-status-page/internal/httpapi"
 	"service-status-page/internal/store"
@@ -33,6 +34,11 @@ func main() {
 		log.Fatal(err)
 	}
 
+	checker, err := checks.New(cfg.ChecksFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	var notifier httpapi.ReportNotifier
 	var tb *bot.Bot
 	if cfg.BotToken != "" {
@@ -47,7 +53,7 @@ func main() {
 		log.Print("BOT_TOKEN is empty; Telegram bot is disabled")
 	}
 
-	handler := httpapi.New(st, notifier, "web/dist")
+	handler := httpapi.New(st, notifier, checker, "web/dist")
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           handler,
