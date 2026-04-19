@@ -9,6 +9,7 @@ import (
 
 	tele "gopkg.in/telebot.v4"
 
+	"service-status-page/internal/checks"
 	"service-status-page/internal/config"
 	"service-status-page/internal/store"
 )
@@ -61,6 +62,32 @@ func (b *Bot) NotifyReport(report store.Report) error {
 	}
 
 	text := formatReport(report)
+	var lastErr error
+	for _, adminID := range b.admins {
+		_, err := b.bot.Send(&tele.User{ID: adminID}, text)
+		if err != nil {
+			lastErr = err
+		}
+	}
+	return lastErr
+}
+
+func (b *Bot) NotifyAvailabilityProblems(results []checks.Result) error {
+	return b.sendToAdmins(formatAvailabilityProblems(results))
+}
+
+func (b *Bot) NotifyAvailabilityRecovered(results []checks.Result) error {
+	return b.sendToAdmins(formatAvailabilityRecovered(results))
+}
+
+func (b *Bot) sendToAdmins(text string) error {
+	if len(b.admins) == 0 {
+		return fmt.Errorf("no telegram admins configured")
+	}
+	if text == "" {
+		return nil
+	}
+
 	var lastErr error
 	for _, adminID := range b.admins {
 		_, err := b.bot.Send(&tele.User{ID: adminID}, text)
@@ -230,6 +257,81 @@ func formatReport(report store.Report) string {
 		parts = append(parts, "Контакт: "+report.Contact)
 	}
 	return strings.Join(parts, "\n\n")
+}
+
+func formatAvailabilityProblems(results []checks.Result) string {
+	failed := make([]checks.Result, 0, len(results))
+	for _, result := range results {
+		if result.State != checks.StateUp {
+			failed = append(failed, result)
+		}
+	}
+	if len(failed) == 0 {
+		return ""
+	}
+
+	parts := []string{"Проблемы с доступностью сайтов"}
+	for _, result := range failed {
+		lines := []string{
+			result.Name,
+			result.URL,
+			"Состояние: " + availabilityStateTitle(result),
+		}
+		if result.StatusCode > 0 {
+			lines = append(lines, fmt.Sprintf("HTTP: %d", result.StatusCode))
+		}
+		if result.Error != "" {
+			lines = append(lines, "Ошибка: "+result.Error)
+		}
+		if result.LatencyMs > 0 {
+			lines = append(lines, fmt.Sprintf("Задержка: %d мс", result.LatencyMs))
+		}
+		if !result.CheckedAt.IsZero() {
+			lines = append(lines, "Проверено: "+result.CheckedAt.Format("02.01 15:04 UTC"))
+		}
+		parts = append(parts, strings.Join(lines, "\n"))
+	}
+
+	return strings.Join(parts, "\n\n")
+}
+
+func formatAvailabilityRecovered(results []checks.Result) string {
+	if len(results) == 0 {
+		return "Доступность сайтов восстановлена"
+	}
+
+	parts := []string{
+		"Доступность сайтов восстановлена",
+		fmt.Sprintf("Все проверки успешны: %d", len(results)),
+	}
+
+	checkedAt := latestCheckedAt(results)
+	if !checkedAt.IsZero() {
+		parts = append(parts, "Проверено: "+checkedAt.Format("02.01 15:04 UTC"))
+	}
+
+	return strings.Join(parts, "\n\n")
+}
+
+func latestCheckedAt(results []checks.Result) time.Time {
+	var latest time.Time
+	for _, result := range results {
+		if result.CheckedAt.After(latest) {
+			latest = result.CheckedAt
+		}
+	}
+	return latest
+}
+
+func availabilityStateTitle(result checks.Result) string {
+	switch result.State {
+	case checks.StateHTTPError:
+		return "HTTP-ошибка"
+	case checks.StateDown:
+		return "Недоступен"
+	default:
+		return result.State
+	}
 }
 
 func adminName(user *tele.User) string {

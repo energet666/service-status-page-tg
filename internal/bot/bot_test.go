@@ -2,8 +2,11 @@ package bot
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
+	"service-status-page/internal/checks"
 	"service-status-page/internal/store"
 )
 
@@ -82,5 +85,69 @@ func TestPublishStatusAnnouncementDoesNotChangeStoredStatus(t *testing.T) {
 	}
 	if snap.Announcements[0].Kind != store.AnnouncementMaintenance {
 		t.Fatalf("announcement kind = %q, want %q", snap.Announcements[0].Kind, store.AnnouncementMaintenance)
+	}
+}
+
+func TestFormatAvailabilityProblems(t *testing.T) {
+	text := formatAvailabilityProblems([]checks.Result{
+		{
+			Name:       "Example",
+			URL:        "https://example.com/",
+			State:      checks.StateHTTPError,
+			StatusCode: 503,
+			Error:      "Service Unavailable",
+			LatencyMs:  120,
+			CheckedAt:  time.Date(2026, 4, 19, 10, 0, 0, 0, time.UTC),
+		},
+		{
+			Name:  "OK",
+			URL:   "https://ok.example/",
+			State: checks.StateUp,
+		},
+	})
+
+	for _, want := range []string{
+		"Проблемы с доступностью сайтов",
+		"Example",
+		"https://example.com/",
+		"Состояние: HTTP-ошибка",
+		"HTTP: 503",
+		"Ошибка: Service Unavailable",
+		"Задержка: 120 мс",
+		"Проверено: 19.04 10:00 UTC",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("message %q does not contain %q", text, want)
+		}
+	}
+	if strings.Contains(text, "OK") {
+		t.Fatalf("message %q contains healthy target", text)
+	}
+}
+
+func TestFormatAvailabilityRecovered(t *testing.T) {
+	text := formatAvailabilityRecovered([]checks.Result{
+		{
+			Name:      "Example",
+			URL:       "https://example.com/",
+			State:     checks.StateUp,
+			CheckedAt: time.Date(2026, 4, 19, 10, 0, 0, 0, time.UTC),
+		},
+		{
+			Name:      "OK",
+			URL:       "https://ok.example/",
+			State:     checks.StateUp,
+			CheckedAt: time.Date(2026, 4, 19, 10, 1, 0, 0, time.UTC),
+		},
+	})
+
+	for _, want := range []string{
+		"Доступность сайтов восстановлена",
+		"Все проверки успешны: 2",
+		"Проверено: 19.04 10:01 UTC",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("message %q does not contain %q", text, want)
+		}
 	}
 }

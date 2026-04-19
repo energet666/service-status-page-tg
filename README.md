@@ -23,6 +23,10 @@ The availability block is the primary service health signal.
 Its header shows an overall badge: green when every target is available, yellow when some targets are unavailable, and red when all targets are unavailable.
 Targets are read from `CHECKS_FILE`, defaulting to `checks.json`.
 If the file is missing or has no targets, the backend falls back to YouTube and Instagram.
+When Telegram is enabled, the backend also runs these checks in the background.
+`CHECKS_INTERVAL` controls the interval and defaults to `5m`.
+If a target becomes unavailable or the failure details change, administrators from `ADMIN_IDS` receive a Telegram report.
+Set `CHECKS_INTERVAL=0` to disable the background monitor without disabling the UI checks.
 
 ```json
 {

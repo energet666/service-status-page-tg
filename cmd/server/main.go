@@ -39,6 +39,9 @@ func main() {
 		log.Fatal(err)
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	var notifier httpapi.ReportNotifier
 	var tb *bot.Bot
 	if cfg.BotToken != "" {
@@ -49,6 +52,13 @@ func main() {
 		notifier = tb
 		go tb.Start()
 		defer tb.Stop()
+		if cfg.CheckInterval > 0 {
+			monitor := checks.NewMonitor(checker, tb, cfg.CheckInterval)
+			go monitor.Run(ctx)
+			log.Printf("availability monitor interval is %s", cfg.CheckInterval)
+		} else {
+			log.Print("availability monitor is disabled")
+		}
 	} else {
 		log.Print("BOT_TOKEN is empty; Telegram bot is disabled")
 	}
@@ -67,14 +77,12 @@ func main() {
 		}
 	}()
 
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-	<-stop
+	<-ctx.Done()
 
 	handler.Shutdown()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := server.Shutdown(ctx); err != nil {
+	if err := server.Shutdown(shutdownCtx); err != nil {
 		log.Printf("shutdown failed: %v", err)
 	}
 }

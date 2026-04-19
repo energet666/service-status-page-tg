@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Config struct {
@@ -15,6 +16,7 @@ type Config struct {
 	PublicBaseURL string
 	DataFile      string
 	ChecksFile    string
+	CheckInterval time.Duration
 }
 
 func Load() (Config, error) {
@@ -26,6 +28,12 @@ func Load() (Config, error) {
 		ChecksFile:    value("CHECKS_FILE", "checks.json"),
 		AdminIDs:      map[int64]struct{}{},
 	}
+
+	checkInterval, err := time.ParseDuration(value("CHECKS_INTERVAL", "5m"))
+	if err != nil {
+		return Config{}, fmt.Errorf("parse CHECKS_INTERVAL: %w", err)
+	}
+	cfg.CheckInterval = checkInterval
 
 	rawAdminIDs := strings.TrimSpace(os.Getenv("ADMIN_IDS"))
 	if rawAdminIDs == "" {
