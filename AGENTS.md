@@ -45,6 +45,14 @@ If `BOT_TOKEN` is empty, the HTTP server still starts and Telegram integration i
 - Build the frontend before expecting Go to serve updated UI assets.
 - Do not commit `.env`, `data/`, `web/dist/`, or `web/node_modules/`.
 
+## Working Memory
+
+- In a new chat/session, read `AGENTS.md` and `MEMORY.md` before making project changes.
+- Treat `MEMORY.md` as project memory for current decisions, implementation notes, constraints, and important prior context.
+- Update `MEMORY.md` when project behavior, configuration, deployment assumptions, or important implementation decisions change.
+- Keep `MEMORY.md` concise: use short factual bullets, not transcripts or temporary debugging notes.
+- If `MEMORY.md` conflicts with source code or `AGENTS.md`, trust source code first, then `AGENTS.md`; note the conflict if it matters for the task.
+
 ## UX Notes
 
 - The first screen is the working status page, not a landing page.
