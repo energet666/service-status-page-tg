@@ -17,6 +17,7 @@
   const checksOpenKey = 'service-status-page.checksOpen';
 
   let status = $state(null);
+  let activeAnnouncement = $state(null);
   let announcements = $state([]);
   let loading = $state(true);
   let loadError = $state('');
@@ -39,15 +40,13 @@
     contact: ''
   });
 
-  let statusView = $derived(getStatusView(status?.state));
-  let StatusIcon = $derived(statusView.icon);
+  let checksSummary = $derived(getChecksSummary(checkTargets, checksLoading, checksError));
   let visibleAnnouncements = $derived(announcements.filter((announcement) => !hideUserMessages || announcement.kind !== 'user'));
 
   $effect(() => {
     loadSavedName();
     loadChecksOpen();
     loadStatus();
-    loadChecks();
     const events = new EventSource('/api/status/events');
 
     events.addEventListener('status', (event) => {
@@ -81,6 +80,7 @@
       applyStatusData(data);
     } catch (error) {
       loadError = error.message || 'Не удалось загрузить статус';
+      checksLoading = false;
     } finally {
       loading = false;
     }
@@ -88,7 +88,14 @@
 
   function applyStatusData(data) {
     status = data.status;
+    activeAnnouncement = data.activeAnnouncement ?? null;
     announcements = data.announcements ?? [];
+    if (data.checks) {
+      checkTargets = data.checks.targets ?? [];
+      checksGeneratedAt = data.checks.meta?.generatedAt ?? data.meta?.generatedAt ?? '';
+      checksLoading = false;
+      checksError = '';
+    }
     loading = false;
     loadError = '';
   }
@@ -97,10 +104,9 @@
     checksLoading = true;
     checksError = '';
     try {
-      const response = await fetch('/api/checks');
+      const response = await fetch('/api/status');
       const data = await readJSON(response);
-      checkTargets = data.targets ?? [];
-      checksGeneratedAt = data.meta?.generatedAt ?? '';
+      applyStatusData(data);
     } catch (error) {
       checksError = error.message || 'Не удалось проверить адреса';
     } finally {
@@ -192,31 +198,42 @@
     }, 3500);
   }
 
-  function getStatusView(state) {
-    if (state === 'maintenance') {
+  function getChecksSummary(targets, loading, error) {
+    if (error) {
       return {
-        title: 'Идет обслуживание',
-        badge: 'badge-warning',
-        panel: 'border-warning/35 bg-warning/10',
-        tone: 'text-warning',
-        icon: Wrench
+        title: 'Ошибка проверки',
+        badge: 'badge-error'
       };
     }
-    if (state === 'incident') {
+    if (loading && targets.length === 0) {
       return {
-        title: 'Есть инцидент',
-        badge: 'badge-error',
-        panel: 'border-error/35 bg-error/10',
-        tone: 'text-error',
-        icon: ShieldAlert
+        title: 'Проверка',
+        badge: 'badge-ghost bg-base-200/70'
+      };
+    }
+    if (targets.length === 0) {
+      return {
+        title: 'Нет проверок',
+        badge: 'badge-ghost bg-base-200/70'
+      };
+    }
+
+    const failed = targets.filter((target) => target.state !== 'up').length;
+    if (failed === 0) {
+      return {
+        title: 'Все доступно',
+        badge: 'badge-success'
+      };
+    }
+    if (failed === targets.length) {
+      return {
+        title: 'Все недоступно',
+        badge: 'badge-error'
       };
     }
     return {
-      title: 'Работает штатно',
-      badge: 'badge-success',
-      panel: 'border-success/35 bg-success/10',
-      tone: 'text-success',
-      icon: CheckCircle2
+      title: 'Часть недоступна',
+      badge: 'badge-warning'
     };
   }
 
@@ -264,14 +281,34 @@
     if (kind === 'user') return 'border-info/45 border-l-info bg-info/5';
     if (kind === 'maintenance') return 'border-warning/45 border-l-warning bg-warning/5';
     if (kind === 'incident') return 'border-error/45 border-l-error bg-error/5';
+    if (kind === 'cleared') return 'border-base-300/70 border-l-base-content/25 bg-base-200/35';
     if (kind === 'resolved') return 'border-success/45 border-l-success bg-success/5';
     return 'border-base-300/70 border-l-base-content/25';
+  }
+
+  function activeAnnouncementClass(kind) {
+    if (kind === 'maintenance') return 'border-warning/45 border-l-warning bg-warning/10';
+    if (kind === 'incident') return 'border-error/45 border-l-error bg-error/10';
+    return 'border-base-content/15 border-l-base-content/35 bg-base-200/55';
+  }
+
+  function activeAnnouncementTone(kind) {
+    if (kind === 'maintenance') return 'text-warning';
+    if (kind === 'incident') return 'text-error';
+    return 'text-base-content/70';
+  }
+
+  function activeAnnouncementIcon(kind) {
+    if (kind === 'maintenance') return Wrench;
+    if (kind === 'incident') return ShieldAlert;
+    return Megaphone;
   }
 
   function announcementLabel(kind) {
     if (kind === 'user') return 'Сообщение пользователя';
     if (kind === 'maintenance') return 'Обслуживание';
     if (kind === 'incident') return 'Инцидент';
+    if (kind === 'cleared') return 'Объявление снято';
     if (kind === 'resolved') return 'Решено';
     return 'Объявление';
   }
@@ -329,32 +366,38 @@
       </div>
     {/if}
 
-    <section class={`surface-panel rounded-lg border p-5 sm:p-6 ${statusView.panel}`}>
-      <div class="flex items-start gap-4">
-        <div class={`shrink-0 rounded-lg border border-current/20 bg-base-100/50 p-2 ${statusView.tone}`}>
-          <StatusIcon class="size-7" />
+    {#if activeAnnouncement}
+      {@const ActiveAnnouncementIcon = activeAnnouncementIcon(activeAnnouncement.kind)}
+      <section class={`surface-panel rounded-lg border border-l-4 p-5 sm:p-6 ${activeAnnouncementClass(activeAnnouncement.kind)}`}>
+        <div class="flex items-start gap-4">
+          <div class={`shrink-0 rounded-lg border border-current/20 bg-base-100/50 p-2 ${activeAnnouncementTone(activeAnnouncement.kind)}`}>
+            <ActiveAnnouncementIcon class="size-7" />
+          </div>
+          <div class="min-w-0 text-base-content">
+            <div class="badge badge-ghost rounded-lg">{announcementLabel(activeAnnouncement.kind)}</div>
+            <p class="mt-3 text-xl font-medium leading-snug">{activeAnnouncement.message}</p>
+            {#if activeAnnouncement.createdAt}
+              <p class="mt-2 text-sm text-base-content/65">Обновлено {formatDate(activeAnnouncement.createdAt)}</p>
+            {/if}
+          </div>
         </div>
-        <div class="min-w-0 text-base-content">
-          <div class={`badge ${statusView.badge} rounded-lg`}>{statusView.title}</div>
-          <p class="mt-3 text-xl font-medium leading-snug">{status?.message ?? 'Загрузка статуса...'}</p>
-          {#if status?.updatedAt}
-            <p class="mt-2 text-sm text-base-content/65">Обновлено {formatDate(status.updatedAt)}</p>
-          {/if}
-        </div>
-      </div>
-    </section>
+      </section>
+    {/if}
 
     <section class="surface-panel rounded-lg border border-base-content/10 p-5 sm:p-6">
       <div class={checksOpen ? 'mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between' : 'flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'}>
         <button
-          class="flex min-w-0 items-center gap-2 rounded-lg text-left text-base-content hover:text-secondary"
+          class="grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-lg text-left text-base-content hover:text-secondary sm:w-auto"
           type="button"
           aria-controls="availability-checks"
           aria-expanded={checksOpen}
           onclick={toggleChecksOpen}
         >
           <Globe2 class="size-5 shrink-0 text-secondary" />
-          <span class="text-2xl font-semibold">Проверка доступности</span>
+          <span class="flex min-w-0 flex-wrap items-center gap-2">
+            <span class="min-w-0 text-2xl font-semibold leading-tight">Проверка доступности</span>
+            <span class={`badge shrink-0 rounded-lg ${checksSummary.badge}`}>{checksSummary.title}</span>
+          </span>
           <ChevronDown class={`size-5 shrink-0 transition-transform ${checksOpen ? 'rotate-180' : ''}`} />
         </button>
 

@@ -26,6 +26,16 @@ type AvailabilityChecker interface {
 	Check(context.Context) []checks.Result
 }
 
+type publicStatus struct {
+	State            store.StatusState `json:"state"`
+	Message          string            `json:"message"`
+	UpdatedAt        time.Time         `json:"updatedAt"`
+	Source           string            `json:"source"`
+	ChecksTotal      int               `json:"checksTotal"`
+	ChecksFailed     int               `json:"checksFailed"`
+	AnnouncementKind string            `json:"announcementKind,omitempty"`
+}
+
 type Server struct {
 	store     *store.Store
 	notifier  ReportNotifier
@@ -70,26 +80,11 @@ func (s *Server) Shutdown() {
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.statusResponse())
+	writeJSON(w, http.StatusOK, s.statusResponse(r.Context()))
 }
 
 func (s *Server) handleChecks(w http.ResponseWriter, r *http.Request) {
-	if s.checker == nil {
-		writeJSON(w, http.StatusOK, map[string]any{
-			"targets": []checks.Result{},
-			"meta": map[string]any{
-				"generatedAt": time.Now().UTC(),
-			},
-		})
-		return
-	}
-
-	writeJSON(w, http.StatusOK, map[string]any{
-		"targets": s.checker.Check(r.Context()),
-		"meta": map[string]any{
-			"generatedAt": time.Now().UTC(),
-		},
-	})
+	writeJSON(w, http.StatusOK, s.checksResponse(r.Context()))
 }
 
 func (s *Server) handleStatusEvents(w http.ResponseWriter, r *http.Request) {
@@ -107,7 +102,7 @@ func (s *Server) handleStatusEvents(w http.ResponseWriter, r *http.Request) {
 	updates, unsubscribe := s.store.Subscribe()
 	defer unsubscribe()
 
-	if err := writeStatusEvent(w, s.statusResponse()); err != nil {
+	if err := writeStatusEvent(w, s.statusResponse(r.Context())); err != nil {
 		return
 	}
 	flusher.Flush()
@@ -122,7 +117,7 @@ func (s *Server) handleStatusEvents(w http.ResponseWriter, r *http.Request) {
 		case <-s.done:
 			return
 		case <-updates:
-			if err := writeStatusEvent(w, s.statusResponse()); err != nil {
+			if err := writeStatusEvent(w, s.statusResponse(r.Context())); err != nil {
 				return
 			}
 			flusher.Flush()
@@ -184,16 +179,128 @@ func (s *Server) handleCreateReport(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) statusResponse() map[string]any {
+func (s *Server) statusResponse(ctx context.Context) map[string]any {
 	snapshot := s.store.Snapshot()
+	targets := s.checkTargets(ctx)
+	generatedAt := time.Now().UTC()
 	return map[string]any{
-		"status":        snapshot.Status,
-		"announcements": snapshot.Announcements,
+		"status":             s.publicStatus(snapshot, targets, generatedAt),
+		"announcements":      snapshot.Announcements,
+		"activeAnnouncement": activeAnnouncement(snapshot.Announcements),
+		"checks": map[string]any{
+			"targets": targets,
+			"meta": map[string]any{
+				"generatedAt": generatedAt,
+			},
+		},
 		"meta": map[string]any{
 			"startedAt":   s.startedAt,
+			"generatedAt": generatedAt,
+		},
+	}
+}
+
+func (s *Server) checksResponse(ctx context.Context) map[string]any {
+	return map[string]any{
+		"targets": s.checkTargets(ctx),
+		"meta": map[string]any{
 			"generatedAt": time.Now().UTC(),
 		},
 	}
+}
+
+func (s *Server) checkTargets(ctx context.Context) []checks.Result {
+	if s.checker == nil {
+		return []checks.Result{}
+	}
+	return s.checker.Check(ctx)
+}
+
+func (s *Server) publicStatus(snapshot store.State, targets []checks.Result, now time.Time) publicStatus {
+	if len(targets) > 0 {
+		failed := failedCheckCount(targets)
+		if failed > 0 {
+			return publicStatus{
+				State:        store.StatusIncident,
+				Message:      fmt.Sprintf("Есть проблема: недоступно %d из %d проверяемых адресов", failed, len(targets)),
+				UpdatedAt:    latestCheckTime(targets, now),
+				Source:       "checks",
+				ChecksTotal:  len(targets),
+				ChecksFailed: failed,
+			}
+		}
+		return publicStatus{
+			State:        store.StatusOK,
+			Message:      "Сервис работает штатно",
+			UpdatedAt:    latestCheckTime(targets, now),
+			Source:       "checks",
+			ChecksTotal:  len(targets),
+			ChecksFailed: 0,
+		}
+	}
+
+	if ann, ok := latestAdminAnnouncement(snapshot.Announcements); ok {
+		return publicStatus{
+			State:            store.StatusOK,
+			Message:          ann.Message,
+			UpdatedAt:        ann.CreatedAt,
+			Source:           "announcement",
+			AnnouncementKind: string(ann.Kind),
+		}
+	}
+
+	return publicStatus{
+		State:     store.StatusOK,
+		Message:   "Сервис работает штатно",
+		UpdatedAt: snapshot.Status.UpdatedAt,
+		Source:    "default",
+	}
+}
+
+func failedCheckCount(targets []checks.Result) int {
+	failed := 0
+	for _, target := range targets {
+		if target.State != checks.StateUp {
+			failed++
+		}
+	}
+	return failed
+}
+
+func latestCheckTime(targets []checks.Result, fallback time.Time) time.Time {
+	latest := time.Time{}
+	for _, target := range targets {
+		if target.CheckedAt.After(latest) {
+			latest = target.CheckedAt
+		}
+	}
+	if latest.IsZero() {
+		return fallback
+	}
+	return latest
+}
+
+func latestAdminAnnouncement(announcements []store.Announcement) (store.Announcement, bool) {
+	for _, ann := range announcements {
+		if ann.Kind == store.AnnouncementUser {
+			continue
+		}
+		if ann.Kind == store.AnnouncementCleared || ann.Kind == store.AnnouncementResolved {
+			return store.Announcement{}, false
+		}
+		if ann.Kind == store.AnnouncementInfo || ann.Kind == store.AnnouncementMaintenance || ann.Kind == store.AnnouncementIncident {
+			return ann, true
+		}
+	}
+	return store.Announcement{}, false
+}
+
+func activeAnnouncement(announcements []store.Announcement) any {
+	ann, ok := latestAdminAnnouncement(announcements)
+	if !ok {
+		return nil
+	}
+	return ann
 }
 
 func (s *Server) handleSPA(w http.ResponseWriter, r *http.Request) {

@@ -19,7 +19,8 @@ If `BOT_TOKEN` is empty, the HTTP server still runs and Telegram integration is 
 
 ## Availability checks
 
-The web page can ask the Go server to check configured web addresses from the server side.
+The availability block is the primary service health signal.
+Its header shows an overall badge: green when every target is available, yellow when some targets are unavailable, and red when all targets are unavailable.
 Targets are read from `CHECKS_FILE`, defaulting to `checks.json`.
 If the file is missing or has no targets, the backend falls back to YouTube and Instagram.
 
@@ -35,18 +36,21 @@ If the file is missing or has no targets, the backend falls back to YouTube and 
 
 Bare domains like `youtube.com` are normalized to HTTPS.
 The availability block in the UI is collapsible and stores its open/closed state in the browser.
+The latest active admin announcement is shown above the availability block.
+Use `/clear` when the announcement is no longer relevant; the clear action is recorded in the status chat.
 
 ## Telegram commands
 
 ```text
-/ok [текст статуса]
-/maintenance [текст статуса]
-/incident [текст статуса]
 /announce текст объявления
-/resolve текст восстановления
+/maintenance [текст объявления]
+/incident [текст объявления]
+/clear [текст записи]
 /delete_last
 /list
 /help
 ```
 
+Announcements have three visible types: plain, maintenance, and incident.
+They do not directly set the service health badge; availability checks do that.
 Only Telegram user ids from `ADMIN_IDS` can use admin commands.

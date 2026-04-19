@@ -14,9 +14,9 @@ import (
 )
 
 const (
-	defaultOKStatusMessage          = "Сервис работает штатно"
 	defaultMaintenanceStatusMessage = "Сервис временно на техническом обслуживании"
 	defaultIncidentStatusMessage    = "В работе сервиса наблюдаются проблемы"
+	defaultClearMessage             = "Объявление снято"
 )
 
 type Bot struct {
@@ -75,22 +75,20 @@ func (b *Bot) registerHandlers() {
 	b.bot.Handle("/help", b.adminOnly(func(c tele.Context) error {
 		return c.Send(helpText())
 	}))
-	b.bot.Handle("/ok", b.adminOnly(b.handleStatus(store.StatusOK, "/ok", defaultOKStatusMessage)))
-	b.bot.Handle("/maintenance", b.adminOnly(b.handleStatus(store.StatusMaintenance, "/maintenance", defaultMaintenanceStatusMessage)))
-	b.bot.Handle("/incident", b.adminOnly(b.handleStatus(store.StatusIncident, "/incident", defaultIncidentStatusMessage)))
+	b.bot.Handle("/maintenance", b.adminOnly(b.handleStatusAnnouncement(store.AnnouncementMaintenance, "/maintenance", defaultMaintenanceStatusMessage)))
+	b.bot.Handle("/incident", b.adminOnly(b.handleStatusAnnouncement(store.AnnouncementIncident, "/incident", defaultIncidentStatusMessage)))
 	b.bot.Handle("/announce", b.adminOnly(b.handleAnnounce))
-	b.bot.Handle("/resolve", b.adminOnly(b.handleResolve))
+	b.bot.Handle("/clear", b.adminOnly(b.handleClear))
 	b.bot.Handle("/delete_last", b.adminOnly(b.handleDeleteLatest))
 	b.bot.Handle("/list", b.adminOnly(b.handleList))
 }
 
 func (b *Bot) syncCommands() {
 	commands := []tele.Command{
-		{Text: "ok", Description: "Сообщить, что сервис работает"},
-		{Text: "maintenance", Description: "Сообщить о техработах"},
-		{Text: "incident", Description: "Сообщить об инциденте"},
-		{Text: "announce", Description: "Опубликовать объявление"},
-		{Text: "resolve", Description: "Закрыть инцидент"},
+		{Text: "announce", Description: "Опубликовать обычное объявление"},
+		{Text: "maintenance", Description: "Опубликовать объявление о работах"},
+		{Text: "incident", Description: "Опубликовать объявление об инциденте"},
+		{Text: "clear", Description: "Снять активное объявление"},
 		{Text: "delete_last", Description: "Удалить последнее объявление"},
 		{Text: "list", Description: "Показать последние объявления"},
 		{Text: "help", Description: "Показать справку"},
@@ -117,17 +115,21 @@ func (b *Bot) adminOnly(next func(tele.Context) error) func(tele.Context) error 
 	}
 }
 
-func (b *Bot) handleStatus(state store.StatusState, command string, defaultMessage ...string) func(tele.Context) error {
+func (b *Bot) handleStatusAnnouncement(kind store.AnnouncementKind, command string, defaultMessage ...string) func(tele.Context) error {
 	return func(c tele.Context) error {
 		message, err := ParseStatusMessage(c.Message().Payload, command, defaultMessage...)
 		if err != nil {
 			return c.Send(err.Error())
 		}
-		if _, err := b.store.SetStatus(state, message, adminName(c.Sender())); err != nil {
-			return c.Send("Не удалось сохранить статус.")
+		if _, err := b.publishStatusAnnouncement(kind, message, adminName(c.Sender())); err != nil {
+			return c.Send("Не удалось сохранить объявление.")
 		}
-		return c.Send("Статус обновлен.")
+		return c.Send("Объявление опубликовано.")
 	}
+}
+
+func (b *Bot) publishStatusAnnouncement(kind store.AnnouncementKind, message, createdBy string) (store.Announcement, error) {
+	return b.store.AddAnnouncement(message, kind, createdBy)
 }
 
 func (b *Bot) handleAnnounce(c tele.Context) error {
@@ -141,15 +143,15 @@ func (b *Bot) handleAnnounce(c tele.Context) error {
 	return c.Send("Объявление опубликовано.")
 }
 
-func (b *Bot) handleResolve(c tele.Context) error {
+func (b *Bot) handleClear(c tele.Context) error {
 	message := strings.TrimSpace(c.Message().Payload)
 	if message == "" {
-		message = "Проблема устранена, сервис работает штатно"
+		message = defaultClearMessage
 	}
-	if _, err := b.store.Resolve(message, adminName(c.Sender())); err != nil {
-		return c.Send("Не удалось сохранить статус.")
+	if _, err := b.store.AddAnnouncement(message, store.AnnouncementCleared, adminName(c.Sender())); err != nil {
+		return c.Send("Не удалось сохранить объявление.")
 	}
-	return c.Send("Статус переведен в ok.")
+	return c.Send("Активное объявление снято.")
 }
 
 func (b *Bot) handleDeleteLatest(c tele.Context) error {
@@ -166,7 +168,7 @@ func (b *Bot) handleDeleteLatest(c tele.Context) error {
 		fmt.Sprintf("%s [%s]\n%s", ann.CreatedAt.Format("02.01 15:04"), ann.Kind, ann.Message),
 	}
 	if statusChanged {
-		lines = append(lines, "Статус откатан на предыдущий.")
+		lines = append(lines, "Legacy-статус откатан на предыдущий.")
 	}
 	return c.Send(strings.Join(lines, "\n\n"))
 }
@@ -199,18 +201,17 @@ func ParseStatusMessage(payload, command string, defaultMessage ...string) (stri
 		if len(defaultMessage) > 0 && strings.TrimSpace(defaultMessage[0]) != "" {
 			return strings.TrimSpace(defaultMessage[0]), nil
 		}
-		return "", fmt.Errorf("Использование: %s текст статуса", command)
+		return "", fmt.Errorf("Использование: %s текст объявления", command)
 	}
 	return message, nil
 }
 
 func helpText() string {
 	return strings.Join([]string{
-		"/ok [текст статуса]",
-		"/maintenance [текст статуса]",
-		"/incident [текст статуса]",
 		"/announce текст объявления",
-		"/resolve текст",
+		"/maintenance [текст объявления]",
+		"/incident [текст объявления]",
+		"/clear [текст записи]",
 		"/delete_last",
 		"/list",
 		"/help",

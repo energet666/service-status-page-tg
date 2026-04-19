@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -126,6 +127,45 @@ func TestCheckerReturnsDownOnRequestFailure(t *testing.T) {
 	}
 	if results[0].Error == "" {
 		t.Fatal("error is empty")
+	}
+	if results[0].Error != "Не удалось подключиться к сайту" {
+		t.Fatalf("error = %q, want connection message", results[0].Error)
+	}
+}
+
+func TestCheckerReturnsHumanTimeoutMessage(t *testing.T) {
+	client := &http.Client{
+		Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return nil, context.DeadlineExceeded
+		}),
+	}
+	checker := NewWithClient([]Target{{Name: "Slow", URL: "https://slow.example/"}}, client)
+
+	results := checker.Check(context.Background())
+
+	if len(results) != 1 {
+		t.Fatalf("results = %d, want 1", len(results))
+	}
+	if results[0].State != StateDown {
+		t.Fatalf("state = %q, want %q", results[0].State, StateDown)
+	}
+	if results[0].Error != "Сайт не ответил за отведенное время" {
+		t.Fatalf("error = %q", results[0].Error)
+	}
+}
+
+func TestCheckerReturnsHumanDNSMessage(t *testing.T) {
+	client := &http.Client{
+		Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return nil, &net.DNSError{Err: "no such host", Name: "missing.example"}
+		}),
+	}
+	checker := NewWithClient([]Target{{Name: "Missing", URL: "https://missing.example/"}}, client)
+
+	results := checker.Check(context.Background())
+
+	if results[0].Error != "Не удалось найти адрес сайта" {
+		t.Fatalf("error = %q", results[0].Error)
 	}
 }
 

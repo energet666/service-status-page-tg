@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -116,7 +117,7 @@ func (c *Checker) checkOne(ctx context.Context, target Target) Result {
 			URL:       target.URL,
 			State:     StateDown,
 			CheckedAt: start,
-			Error:     err.Error(),
+			Error:     "Некорректный адрес для проверки",
 		}
 	}
 
@@ -130,7 +131,7 @@ func (c *Checker) checkOne(ctx context.Context, target Target) Result {
 		checkedAt := c.now()
 		result.CheckedAt = checkedAt
 		result.LatencyMs = latencyMs(start, checkedAt)
-		result.Error = err.Error()
+		result.Error = humanError(err)
 		return result
 	}
 	defer res.Body.Close()
@@ -148,6 +149,30 @@ func (c *Checker) checkOne(ctx context.Context, target Target) Result {
 	result.State = StateHTTPError
 	result.Error = res.Status
 	return result
+}
+
+func humanError(err error) string {
+	if err == nil {
+		return ""
+	}
+	if errors.Is(err, context.Canceled) {
+		return "Проверка отменена"
+	}
+	if errors.Is(err, context.DeadlineExceeded) || os.IsTimeout(err) {
+		return "Сайт не ответил за отведенное время"
+	}
+
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		return "Не удалось найти адрес сайта"
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return "Не удалось подключиться к сайту"
+	}
+
+	return "Не удалось проверить доступность сайта"
 }
 
 func normalizeTargets(targets []Target) []Target {

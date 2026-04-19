@@ -29,6 +29,7 @@ const (
 	AnnouncementMaintenance AnnouncementKind = "maintenance"
 	AnnouncementIncident    AnnouncementKind = "incident"
 	AnnouncementResolved    AnnouncementKind = "resolved"
+	AnnouncementCleared     AnnouncementKind = "cleared"
 	AnnouncementUser        AnnouncementKind = "user"
 )
 

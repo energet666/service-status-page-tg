@@ -54,6 +54,203 @@ func TestGetStatusOnEmptyState(t *testing.T) {
 	}
 }
 
+func TestGetStatusUsesChecksWhenAllTargetsAreUp(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.AddAnnouncement("Администратор проверяет сервис", store.AnnouncementIncident, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	handler := New(st, nil, fakeChecker{results: []checks.Result{
+		{Name: "Example", URL: "https://example.com/", State: checks.StateUp, CheckedAt: time.Now().UTC()},
+	}}, filepath.Join(t.TempDir(), "dist"))
+	req := httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", res.Code, http.StatusOK)
+	}
+	var body struct {
+		Status             publicStatus        `json:"status"`
+		ActiveAnnouncement *store.Announcement `json:"activeAnnouncement"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Status.State != store.StatusOK {
+		t.Fatalf("state = %q, want %q", body.Status.State, store.StatusOK)
+	}
+	if body.Status.Source != "checks" {
+		t.Fatalf("source = %q, want checks", body.Status.Source)
+	}
+	if body.Status.ChecksTotal != 1 || body.Status.ChecksFailed != 0 {
+		t.Fatalf("check counts = %d/%d, want 1/0", body.Status.ChecksTotal, body.Status.ChecksFailed)
+	}
+	if body.ActiveAnnouncement == nil {
+		t.Fatal("activeAnnouncement is nil, want admin announcement")
+	}
+	if body.ActiveAnnouncement.Kind != store.AnnouncementIncident {
+		t.Fatalf("active announcement kind = %q, want %q", body.ActiveAnnouncement.Kind, store.AnnouncementIncident)
+	}
+}
+
+func TestGetStatusUsesIncidentWhenAnyTargetIsDown(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := New(st, nil, fakeChecker{results: []checks.Result{
+		{Name: "Up", URL: "https://up.example/", State: checks.StateUp, CheckedAt: time.Now().UTC()},
+		{Name: "Down", URL: "https://down.example/", State: checks.StateDown, CheckedAt: time.Now().UTC(), Error: "timeout"},
+	}}, filepath.Join(t.TempDir(), "dist"))
+	req := httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	var body struct {
+		Status             publicStatus        `json:"status"`
+		ActiveAnnouncement *store.Announcement `json:"activeAnnouncement"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Status.State != store.StatusIncident {
+		t.Fatalf("state = %q, want %q", body.Status.State, store.StatusIncident)
+	}
+	if body.Status.ChecksTotal != 2 || body.Status.ChecksFailed != 1 {
+		t.Fatalf("check counts = %d/%d, want 2/1", body.Status.ChecksTotal, body.Status.ChecksFailed)
+	}
+}
+
+func TestGetStatusUsesIncidentWhenAnyTargetHasHTTPError(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := New(st, nil, fakeChecker{results: []checks.Result{
+		{Name: "Broken", URL: "https://broken.example/", State: checks.StateHTTPError, StatusCode: http.StatusServiceUnavailable, CheckedAt: time.Now().UTC()},
+	}}, filepath.Join(t.TempDir(), "dist"))
+	req := httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	var body struct {
+		Status             publicStatus        `json:"status"`
+		ActiveAnnouncement *store.Announcement `json:"activeAnnouncement"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Status.State != store.StatusIncident {
+		t.Fatalf("state = %q, want %q", body.Status.State, store.StatusIncident)
+	}
+	if body.Status.ChecksFailed != 1 {
+		t.Fatalf("checksFailed = %d, want 1", body.Status.ChecksFailed)
+	}
+}
+
+func TestGetStatusFallsBackToLatestAdminAnnouncementWithoutChecks(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.AddAnnouncement("Администратор проверяет сервис", store.AnnouncementInfo, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.AddAnnouncement("Пользовательское сообщение", store.AnnouncementUser, "user"); err != nil {
+		t.Fatal(err)
+	}
+	handler := New(st, nil, nil, filepath.Join(t.TempDir(), "dist"))
+	req := httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	var body struct {
+		Status             publicStatus        `json:"status"`
+		ActiveAnnouncement *store.Announcement `json:"activeAnnouncement"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Status.Source != "announcement" {
+		t.Fatalf("source = %q, want announcement", body.Status.Source)
+	}
+	if body.Status.State != store.StatusOK {
+		t.Fatalf("state = %q, want neutral %q", body.Status.State, store.StatusOK)
+	}
+	if body.Status.Message != "Администратор проверяет сервис" {
+		t.Fatalf("message = %q", body.Status.Message)
+	}
+	if body.ActiveAnnouncement == nil {
+		t.Fatal("activeAnnouncement is nil, want admin announcement")
+	}
+	if body.ActiveAnnouncement.Message != "Администратор проверяет сервис" {
+		t.Fatalf("active announcement message = %q", body.ActiveAnnouncement.Message)
+	}
+}
+
+func TestGetStatusClearedAnnouncementRemovesActiveAnnouncement(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.AddAnnouncement("Ведутся работы", store.AnnouncementMaintenance, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.AddAnnouncement("Объявление снято", store.AnnouncementCleared, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	handler := New(st, nil, nil, filepath.Join(t.TempDir(), "dist"))
+	req := httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	var body struct {
+		ActiveAnnouncement *store.Announcement  `json:"activeAnnouncement"`
+		Announcements      []store.Announcement `json:"announcements"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body.ActiveAnnouncement != nil {
+		t.Fatalf("activeAnnouncement = %#v, want nil", body.ActiveAnnouncement)
+	}
+	if len(body.Announcements) == 0 {
+		t.Fatal("announcements is empty")
+	}
+	if body.Announcements[0].Kind != store.AnnouncementCleared {
+		t.Fatalf("latest announcement kind = %q, want %q", body.Announcements[0].Kind, store.AnnouncementCleared)
+	}
+}
+
+func TestGetStatusFallsBackToDefaultWithoutChecksOrAnnouncements(t *testing.T) {
+	handler := newTestHandler(t, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	var body struct {
+		Status publicStatus `json:"status"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Status.Source != "default" {
+		t.Fatalf("source = %q, want default", body.Status.Source)
+	}
+	if body.Status.State != store.StatusOK {
+		t.Fatalf("state = %q, want %q", body.Status.State, store.StatusOK)
+	}
+}
+
 func TestStatusEventsStreamInitialAndUpdatedState(t *testing.T) {
 	st, err := store.Open(filepath.Join(t.TempDir(), "state.json"))
 	if err != nil {
@@ -86,8 +283,14 @@ func TestStatusEventsStreamInitialAndUpdatedState(t *testing.T) {
 	}
 
 	updated := readSSEStatus(t, res)
-	if updated.Status.State != store.StatusIncident {
-		t.Fatalf("updated state = %q, want %q", updated.Status.State, store.StatusIncident)
+	if updated.Status.Source != "announcement" {
+		t.Fatalf("updated source = %q, want announcement", updated.Status.Source)
+	}
+	if updated.Status.State != store.StatusOK {
+		t.Fatalf("updated state = %q, want neutral %q", updated.Status.State, store.StatusOK)
+	}
+	if updated.Status.Message != "Проверочный инцидент" {
+		t.Fatalf("updated message = %q", updated.Status.Message)
 	}
 
 	cancel()
@@ -303,7 +506,7 @@ func (w *sseTestWriter) statusCode() int {
 }
 
 func readSSEStatus(t *testing.T, writer *sseTestWriter) struct {
-	Status store.Status `json:"status"`
+	Status publicStatus `json:"status"`
 } {
 	t.Helper()
 
@@ -327,7 +530,7 @@ func readSSEStatus(t *testing.T, writer *sseTestWriter) struct {
 		}
 
 		var body struct {
-			Status store.Status `json:"status"`
+			Status publicStatus `json:"status"`
 		}
 		if err := json.Unmarshal([]byte(strings.TrimSpace(dataLine)), &body); err != nil {
 			t.Fatal(err)
