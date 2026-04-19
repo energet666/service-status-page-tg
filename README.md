@@ -25,6 +25,7 @@ If `BOT_TOKEN` is empty, the HTTP server still runs and Telegram integration is 
 /incident [текст статуса]
 /announce текст объявления
 /resolve текст восстановления
+/delete_last
 /list
 /help
 ```

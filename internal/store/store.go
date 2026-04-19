@@ -39,11 +39,12 @@ type Status struct {
 }
 
 type Announcement struct {
-	ID        string           `json:"id"`
-	Message   string           `json:"message"`
-	Kind      AnnouncementKind `json:"kind"`
-	CreatedAt time.Time        `json:"createdAt"`
-	CreatedBy string           `json:"createdBy"`
+	ID          string           `json:"id"`
+	Message     string           `json:"message"`
+	Kind        AnnouncementKind `json:"kind"`
+	StatusState *StatusState     `json:"statusState,omitempty"`
+	CreatedAt   time.Time        `json:"createdAt"`
+	CreatedBy   string           `json:"createdBy"`
 }
 
 type Report struct {
@@ -69,6 +70,8 @@ type Store struct {
 	data        State
 	subscribers map[chan struct{}]struct{}
 }
+
+var ErrNoAnnouncements = errors.New("no announcements")
 
 func Open(path string) (*Store, error) {
 	st := &Store{path: path}
@@ -111,11 +114,12 @@ func (s *Store) SetStatus(state StatusState, message, createdBy string) (Announc
 	now := time.Now().UTC()
 	s.data.Status = Status{State: state, Message: message, UpdatedAt: now}
 	ann := Announcement{
-		ID:        newID(),
-		Message:   message,
-		Kind:      announcementKindForStatus(state),
-		CreatedAt: now,
-		CreatedBy: createdBy,
+		ID:          newID(),
+		Message:     message,
+		Kind:        announcementKindForStatus(state),
+		StatusState: statusStatePtr(state),
+		CreatedAt:   now,
+		CreatedBy:   createdBy,
 	}
 	s.prependAnnouncement(ann)
 	if err := s.saveLocked(); err != nil {
@@ -132,11 +136,12 @@ func (s *Store) Resolve(message, createdBy string) (Announcement, error) {
 	now := time.Now().UTC()
 	s.data.Status = Status{State: StatusOK, Message: message, UpdatedAt: now}
 	ann := Announcement{
-		ID:        newID(),
-		Message:   message,
-		Kind:      AnnouncementResolved,
-		CreatedAt: now,
-		CreatedBy: createdBy,
+		ID:          newID(),
+		Message:     message,
+		Kind:        AnnouncementResolved,
+		StatusState: statusStatePtr(StatusOK),
+		CreatedAt:   now,
+		CreatedBy:   createdBy,
 	}
 	s.prependAnnouncement(ann)
 	if err := s.saveLocked(); err != nil {
@@ -163,6 +168,27 @@ func (s *Store) AddAnnouncement(message string, kind AnnouncementKind, createdBy
 	}
 	s.broadcastLocked()
 	return ann, nil
+}
+
+func (s *Store) DeleteLatestAnnouncement() (Announcement, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if len(s.data.Announcements) == 0 {
+		return Announcement{}, false, ErrNoAnnouncements
+	}
+
+	ann := s.data.Announcements[0]
+	s.data.Announcements = append([]Announcement{}, s.data.Announcements[1:]...)
+	statusChanged := s.announcementChangedCurrentStatusLocked(ann)
+	if statusChanged {
+		s.data.Status = s.previousStatusLocked()
+	}
+	if err := s.saveLocked(); err != nil {
+		return ann, statusChanged, err
+	}
+	s.broadcastLocked()
+	return ann, statusChanged, nil
 }
 
 func (s *Store) AddReport(report Report) (Report, error) {
@@ -292,6 +318,50 @@ func announcementKindForStatus(state StatusState) AnnouncementKind {
 		return AnnouncementIncident
 	default:
 		return AnnouncementInfo
+	}
+}
+
+func statusStatePtr(state StatusState) *StatusState {
+	return &state
+}
+
+func (s *Store) announcementChangedCurrentStatusLocked(ann Announcement) bool {
+	state, ok := statusStateForAnnouncement(ann)
+	if !ok {
+		return false
+	}
+	return s.data.Status.State == state && s.data.Status.Message == ann.Message
+}
+
+func (s *Store) previousStatusLocked() Status {
+	for _, ann := range s.data.Announcements {
+		state, ok := statusStateForAnnouncement(ann)
+		if !ok {
+			continue
+		}
+		return Status{
+			State:     state,
+			Message:   ann.Message,
+			UpdatedAt: ann.CreatedAt,
+		}
+	}
+	return defaultState().Status
+}
+
+func statusStateForAnnouncement(ann Announcement) (StatusState, bool) {
+	if ann.StatusState != nil && *ann.StatusState != "" {
+		return *ann.StatusState, true
+	}
+
+	switch ann.Kind {
+	case AnnouncementMaintenance:
+		return StatusMaintenance, true
+	case AnnouncementIncident:
+		return StatusIncident, true
+	case AnnouncementResolved:
+		return StatusOK, true
+	default:
+		return "", false
 	}
 }
 

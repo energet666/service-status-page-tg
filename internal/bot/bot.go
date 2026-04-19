@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -79,6 +80,7 @@ func (b *Bot) registerHandlers() {
 	b.bot.Handle("/incident", b.adminOnly(b.handleStatus(store.StatusIncident, "/incident", defaultIncidentStatusMessage)))
 	b.bot.Handle("/announce", b.adminOnly(b.handleAnnounce))
 	b.bot.Handle("/resolve", b.adminOnly(b.handleResolve))
+	b.bot.Handle("/delete_last", b.adminOnly(b.handleDeleteLatest))
 	b.bot.Handle("/list", b.adminOnly(b.handleList))
 }
 
@@ -89,6 +91,7 @@ func (b *Bot) syncCommands() {
 		{Text: "incident", Description: "Сообщить об инциденте"},
 		{Text: "announce", Description: "Опубликовать объявление"},
 		{Text: "resolve", Description: "Закрыть инцидент"},
+		{Text: "delete_last", Description: "Удалить последнее объявление"},
 		{Text: "list", Description: "Показать последние объявления"},
 		{Text: "help", Description: "Показать справку"},
 	}
@@ -149,6 +152,25 @@ func (b *Bot) handleResolve(c tele.Context) error {
 	return c.Send("Статус переведен в ok.")
 }
 
+func (b *Bot) handleDeleteLatest(c tele.Context) error {
+	ann, statusChanged, err := b.store.DeleteLatestAnnouncement()
+	if errors.Is(err, store.ErrNoAnnouncements) {
+		return c.Send("Объявлений пока нет.")
+	}
+	if err != nil {
+		return c.Send("Не удалось удалить последнее объявление.")
+	}
+
+	lines := []string{
+		"Последнее объявление удалено.",
+		fmt.Sprintf("%s [%s]\n%s", ann.CreatedAt.Format("02.01 15:04"), ann.Kind, ann.Message),
+	}
+	if statusChanged {
+		lines = append(lines, "Статус откатан на предыдущий.")
+	}
+	return c.Send(strings.Join(lines, "\n\n"))
+}
+
 func (b *Bot) handleList(c tele.Context) error {
 	snap := b.store.Snapshot()
 	if len(snap.Announcements) == 0 {
@@ -189,6 +211,7 @@ func helpText() string {
 		"/incident [текст статуса]",
 		"/announce текст объявления",
 		"/resolve текст",
+		"/delete_last",
 		"/list",
 		"/help",
 	}, "\n")
