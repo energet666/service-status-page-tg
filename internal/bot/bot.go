@@ -20,6 +20,10 @@ const (
 	defaultClearMessage             = "Объявление снято"
 )
 
+var noPreview = &tele.SendOptions{
+	DisableWebPagePreview: true,
+}
+
 type Bot struct {
 	bot      *tele.Bot
 	store    *store.Store
@@ -64,7 +68,7 @@ func (b *Bot) NotifyReport(report store.Report) error {
 	text := formatReport(report)
 	var lastErr error
 	for _, adminID := range b.admins {
-		_, err := b.bot.Send(&tele.User{ID: adminID}, text)
+		_, err := b.bot.Send(&tele.User{ID: adminID}, text, noPreview)
 		if err != nil {
 			lastErr = err
 		}
@@ -90,7 +94,7 @@ func (b *Bot) sendToAdmins(text string) error {
 
 	var lastErr error
 	for _, adminID := range b.admins {
-		_, err := b.bot.Send(&tele.User{ID: adminID}, text)
+		_, err := b.bot.Send(&tele.User{ID: adminID}, text, noPreview)
 		if err != nil {
 			lastErr = err
 		}
