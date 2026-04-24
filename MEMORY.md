@@ -25,6 +25,7 @@ npm run build
 
 - The status page uses server-side web address availability checks as the primary visible health signal.
 - `GET /api/status` returns current check results and the active admin announcement; `GET /api/checks` remains available for check-only data.
+- `GET /api/status` also returns an optional `pinnedInfo` block for persistent instructions or other stable page text.
 - Availability targets are read from `CHECKS_FILE`, defaulting to `checks.json`.
 - When Telegram is enabled, background availability monitoring runs every `CHECKS_INTERVAL`, defaulting to `5m`.
 
@@ -39,6 +40,7 @@ npm run build
 - Use HTTP(S) GET from the Go server for availability checks, not browser-side checks or ICMP ping.
 - Store the availability panel open/closed state in browser `localStorage`.
 - Admin announcements are separate from service health. Use `/announce`, `/maintenance`, and `/incident` for active announcements, and `/clear` to remove the active announcement while recording the clear action in the chat.
+- A separate persistent info block can be managed via Telegram with `/info` and `/clearinfo`; it is shown at the top of the page and is not part of the announcement feed.
 - Availability check errors should be human-readable in the UI; do not expose raw transport error strings for common timeout, DNS, or connection failures.
 - Background availability alerts notify Telegram admins when a problem appears or changes, and notify once when all targets recover. Manual UI checks do not affect monitor state.
 

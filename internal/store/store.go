@@ -48,6 +48,12 @@ type Announcement struct {
 	CreatedBy   string           `json:"createdBy"`
 }
 
+type PinnedInfo struct {
+	Message   string    `json:"message"`
+	CreatedAt time.Time `json:"createdAt"`
+	CreatedBy string    `json:"createdBy"`
+}
+
 type Report struct {
 	ID             string    `json:"id"`
 	Message        string    `json:"message"`
@@ -61,6 +67,7 @@ type Report struct {
 
 type State struct {
 	Status        Status         `json:"status"`
+	PinnedInfo    *PinnedInfo    `json:"pinnedInfo,omitempty"`
 	Announcements []Announcement `json:"announcements"`
 	Reports       []Report       `json:"reports"`
 }
@@ -169,6 +176,38 @@ func (s *Store) AddAnnouncement(message string, kind AnnouncementKind, createdBy
 	}
 	s.broadcastLocked()
 	return ann, nil
+}
+
+func (s *Store) SetPinnedInfo(message, createdBy string) (PinnedInfo, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	info := &PinnedInfo{
+		Message:   message,
+		CreatedAt: time.Now().UTC(),
+		CreatedBy: createdBy,
+	}
+	s.data.PinnedInfo = info
+	if err := s.saveLocked(); err != nil {
+		return PinnedInfo{}, err
+	}
+	s.broadcastLocked()
+	return *info, nil
+}
+
+func (s *Store) ClearPinnedInfo() (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.data.PinnedInfo == nil {
+		return false, nil
+	}
+	s.data.PinnedInfo = nil
+	if err := s.saveLocked(); err != nil {
+		return false, err
+	}
+	s.broadcastLocked()
+	return true, nil
 }
 
 func (s *Store) DeleteLatestAnnouncement() (Announcement, bool, error) {
@@ -368,6 +407,10 @@ func statusStateForAnnouncement(ann Announcement) (StatusState, bool) {
 
 func cloneState(in State) State {
 	out := in
+	if in.PinnedInfo != nil {
+		info := *in.PinnedInfo
+		out.PinnedInfo = &info
+	}
 	out.Announcements = append([]Announcement{}, in.Announcements...)
 	out.Reports = append([]Report{}, in.Reports...)
 	return out

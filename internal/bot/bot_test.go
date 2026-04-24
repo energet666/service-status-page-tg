@@ -88,6 +88,18 @@ func TestPublishStatusAnnouncementDoesNotChangeStoredStatus(t *testing.T) {
 	}
 }
 
+func TestHelpTextIncludesPinnedInfoCommands(t *testing.T) {
+	text := helpText()
+	for _, want := range []string{
+		"/info текст постоянного блока",
+		"/clearinfo",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("help text %q does not contain %q", text, want)
+		}
+	}
+}
+
 func TestFormatAvailabilityProblems(t *testing.T) {
 	text := formatAvailabilityProblems([]checks.Result{
 		{

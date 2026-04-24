@@ -185,6 +185,7 @@ func (s *Server) statusResponse(ctx context.Context) map[string]any {
 	generatedAt := time.Now().UTC()
 	return map[string]any{
 		"status":             s.publicStatus(snapshot, targets, generatedAt),
+		"pinnedInfo":         snapshot.PinnedInfo,
 		"announcements":      snapshot.Announcements,
 		"activeAnnouncement": activeAnnouncement(snapshot.Announcements),
 		"checks": map[string]any{

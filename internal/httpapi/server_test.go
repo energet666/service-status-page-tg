@@ -54,6 +54,35 @@ func TestGetStatusOnEmptyState(t *testing.T) {
 	}
 }
 
+func TestGetStatusIncludesPinnedInfo(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SetPinnedInfo("Инструкция для клиентов", "admin"); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := New(st, nil, nil, filepath.Join(t.TempDir(), "dist"))
+	req := httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+
+	var body struct {
+		PinnedInfo *store.PinnedInfo `json:"pinnedInfo"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body.PinnedInfo == nil {
+		t.Fatal("pinnedInfo = nil, want value")
+	}
+	if body.PinnedInfo.Message != "Инструкция для клиентов" {
+		t.Fatalf("pinnedInfo message = %q", body.PinnedInfo.Message)
+	}
+}
+
 func TestGetStatusUsesChecksWhenAllTargetsAreUp(t *testing.T) {
 	st, err := store.Open(filepath.Join(t.TempDir(), "state.json"))
 	if err != nil {

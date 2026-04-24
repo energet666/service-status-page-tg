@@ -109,7 +109,9 @@ func (b *Bot) registerHandlers() {
 	b.bot.Handle("/maintenance", b.adminOnly(b.handleStatusAnnouncement(store.AnnouncementMaintenance, "/maintenance", defaultMaintenanceStatusMessage)))
 	b.bot.Handle("/incident", b.adminOnly(b.handleStatusAnnouncement(store.AnnouncementIncident, "/incident", defaultIncidentStatusMessage)))
 	b.bot.Handle("/announce", b.adminOnly(b.handleAnnounce))
+	b.bot.Handle("/info", b.adminOnly(b.handlePinnedInfo))
 	b.bot.Handle("/clear", b.adminOnly(b.handleClear))
+	b.bot.Handle("/clearinfo", b.adminOnly(b.handleClearPinnedInfo))
 	b.bot.Handle("/delete_last", b.adminOnly(b.handleDeleteLatest))
 	b.bot.Handle("/list", b.adminOnly(b.handleList))
 }
@@ -119,7 +121,9 @@ func (b *Bot) syncCommands() {
 		{Text: "announce", Description: "Опубликовать обычное объявление"},
 		{Text: "maintenance", Description: "Опубликовать объявление о работах"},
 		{Text: "incident", Description: "Опубликовать объявление об инциденте"},
+		{Text: "info", Description: "Обновить постоянный инфо-блок"},
 		{Text: "clear", Description: "Снять активное объявление"},
+		{Text: "clearinfo", Description: "Очистить постоянный инфо-блок"},
 		{Text: "delete_last", Description: "Удалить последнее объявление"},
 		{Text: "list", Description: "Показать последние объявления"},
 		{Text: "help", Description: "Показать справку"},
@@ -174,6 +178,17 @@ func (b *Bot) handleAnnounce(c tele.Context) error {
 	return c.Send("Объявление опубликовано.")
 }
 
+func (b *Bot) handlePinnedInfo(c tele.Context) error {
+	message := strings.TrimSpace(c.Message().Payload)
+	if message == "" {
+		return c.Send("Использование: /info текст постоянного блока")
+	}
+	if _, err := b.store.SetPinnedInfo(message, adminName(c.Sender())); err != nil {
+		return c.Send("Не удалось сохранить постоянный блок.")
+	}
+	return c.Send("Постоянный блок обновлен.")
+}
+
 func (b *Bot) handleClear(c tele.Context) error {
 	message := strings.TrimSpace(c.Message().Payload)
 	if message == "" {
@@ -183,6 +198,17 @@ func (b *Bot) handleClear(c tele.Context) error {
 		return c.Send("Не удалось сохранить объявление.")
 	}
 	return c.Send("Активное объявление снято.")
+}
+
+func (b *Bot) handleClearPinnedInfo(c tele.Context) error {
+	cleared, err := b.store.ClearPinnedInfo()
+	if err != nil {
+		return c.Send("Не удалось очистить постоянный блок.")
+	}
+	if !cleared {
+		return c.Send("Постоянный блок уже пуст.")
+	}
+	return c.Send("Постоянный блок очищен.")
 }
 
 func (b *Bot) handleDeleteLatest(c tele.Context) error {
@@ -242,7 +268,9 @@ func helpText() string {
 		"/announce текст объявления",
 		"/maintenance [текст объявления]",
 		"/incident [текст объявления]",
+		"/info текст постоянного блока",
 		"/clear [текст записи]",
+		"/clearinfo",
 		"/delete_last",
 		"/list",
 		"/help",

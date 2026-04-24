@@ -30,6 +30,9 @@ func TestStorePersistsUpdates(t *testing.T) {
 	if _, err := st.SetStatus(StatusMaintenance, "Работы с 13:00 до 14:00", "test"); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := st.SetPinnedInfo("Инструкция по оплате доступна в личном кабинете", "test"); err != nil {
+		t.Fatal(err)
+	}
 
 	reopened, err := Open(path)
 	if err != nil {
@@ -41,6 +44,58 @@ func TestStorePersistsUpdates(t *testing.T) {
 	}
 	if len(snap.Announcements) != 1 {
 		t.Fatalf("announcements = %d, want 1", len(snap.Announcements))
+	}
+	if snap.PinnedInfo == nil {
+		t.Fatal("pinnedInfo = nil, want value")
+	}
+	if snap.PinnedInfo.Message != "Инструкция по оплате доступна в личном кабинете" {
+		t.Fatalf("pinnedInfo message = %q", snap.PinnedInfo.Message)
+	}
+}
+
+func TestSetPinnedInfoStoresValue(t *testing.T) {
+	st, err := Open(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	info, err := st.SetPinnedInfo("Проверьте новые правила подключения", "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	snap := st.Snapshot()
+	if snap.PinnedInfo == nil {
+		t.Fatal("pinnedInfo = nil, want value")
+	}
+	if snap.PinnedInfo.Message != info.Message {
+		t.Fatalf("pinnedInfo message = %q, want %q", snap.PinnedInfo.Message, info.Message)
+	}
+	if snap.PinnedInfo.CreatedBy != "admin" {
+		t.Fatalf("pinnedInfo createdBy = %q, want admin", snap.PinnedInfo.CreatedBy)
+	}
+}
+
+func TestClearPinnedInfoRemovesValue(t *testing.T) {
+	st, err := Open(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SetPinnedInfo("Старый текст", "admin"); err != nil {
+		t.Fatal(err)
+	}
+
+	cleared, err := st.ClearPinnedInfo()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cleared {
+		t.Fatal("cleared = false, want true")
+	}
+
+	snap := st.Snapshot()
+	if snap.PinnedInfo != nil {
+		t.Fatalf("pinnedInfo = %#v, want nil", snap.PinnedInfo)
 	}
 }
 

@@ -4,6 +4,7 @@
     ChevronDown,
     CheckCircle2,
     Globe2,
+    Info,
     LoaderCircle,
     Megaphone,
     MessageSquareText,
@@ -17,6 +18,7 @@
   const checksOpenKey = 'service-status-page.checksOpen';
 
   let status = $state(null);
+  let pinnedInfo = $state(null);
   let activeAnnouncement = $state(null);
   let announcements = $state([]);
   let loading = $state(true);
@@ -88,6 +90,7 @@
 
   function applyStatusData(data) {
     status = data.status;
+    pinnedInfo = data.pinnedInfo ?? null;
     activeAnnouncement = data.activeAnnouncement ?? null;
     announcements = data.announcements ?? [];
     if (data.checks) {
@@ -358,6 +361,23 @@
         <span>{realtimeError}</span>
       {/if}
     </div>
+
+    {#if pinnedInfo}
+      <section class="surface-panel rounded-lg border border-l-4 border-l-info border-info/35 bg-info/6 p-5 sm:p-6">
+        <div class="flex items-start gap-4">
+          <div class="shrink-0 rounded-lg border border-info/20 bg-base-100/60 p-2 text-info">
+            <Info class="size-7" />
+          </div>
+          <div class="min-w-0 text-base-content">
+            <div class="badge badge-info badge-outline rounded-lg">Дополнительная информация</div>
+            <p class="mt-3 whitespace-pre-wrap text-lg leading-relaxed">{pinnedInfo.message}</p>
+            {#if pinnedInfo.createdAt}
+              <p class="mt-2 text-sm text-base-content/65">Обновлено {formatDate(pinnedInfo.createdAt)}</p>
+            {/if}
+          </div>
+        </div>
+      </section>
+    {/if}
 
     {#if loadError}
       <div class="alert alert-error rounded-lg">
