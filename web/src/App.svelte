@@ -370,7 +370,7 @@
           </div>
           <div class="min-w-0 text-base-content">
             <div class="badge badge-info badge-outline rounded-lg">Дополнительная информация</div>
-            <p class="mt-3 whitespace-pre-wrap text-lg leading-relaxed">{pinnedInfo.message}</p>
+            <p class="mt-3 break-all whitespace-pre-wrap text-lg leading-relaxed">{pinnedInfo.message}</p>
             {#if pinnedInfo.createdAt}
               <p class="mt-2 text-sm text-base-content/65">Обновлено {formatDate(pinnedInfo.createdAt)}</p>
             {/if}
@@ -395,7 +395,7 @@
           </div>
           <div class="min-w-0 text-base-content">
             <div class="badge badge-ghost rounded-lg">{announcementLabel(activeAnnouncement.kind)}</div>
-            <p class="mt-3 text-xl font-medium leading-snug">{activeAnnouncement.message}</p>
+            <p class="mt-3 break-all text-xl font-medium leading-snug">{activeAnnouncement.message}</p>
             {#if activeAnnouncement.createdAt}
               <p class="mt-2 text-sm text-base-content/65">Обновлено {formatDate(activeAnnouncement.createdAt)}</p>
             {/if}
@@ -608,7 +608,7 @@
                         <span class="text-sm font-medium text-base-content/65">{userDisplayName(announcement)}</span>
                       {/if}
                     </div>
-                    <p class="leading-relaxed">{announcement.message}</p>
+                    <p class="break-all leading-relaxed">{announcement.message}</p>
                   </div>
                   <time class="shrink-0 text-sm text-base-content/60">{formatDate(announcement.createdAt)}</time>
                 </div>
