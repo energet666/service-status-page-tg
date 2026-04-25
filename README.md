@@ -22,18 +22,25 @@ If `BOT_TOKEN` is empty, the HTTP server still runs and Telegram integration is 
 The GitHub Actions release workflow publishes an image to GitHub Container Registry:
 
 ```text
-ghcr.io/<owner>/<repo>:deploy-latest
-ghcr.io/<owner>/<repo>:sha-<commit>
+ghcr.io/energet666/service-status-page-tg:deploy-latest
+ghcr.io/energet666/service-status-page-tg:sha-<commit>
 ```
 
 Run it locally with a mounted data directory:
 
 ```sh
-docker run --rm -p 8080:8080 -v "$(pwd)/data:/app/data" ghcr.io/<owner>/<repo>:deploy-latest
+docker run --rm -p 8080:8080 -v "$(pwd)/data:/app/data" ghcr.io/energet666/service-status-page-tg:deploy-latest
+```
+
+Or use the Compose template:
+
+```sh
+cp docker-compose.example.yml docker-compose.yml
+docker compose up -d
 ```
 
 The image includes the built frontend and the default `checks.json`.
-Override `BOT_TOKEN`, `ADMIN_IDS`, `PUBLIC_BASE_URL`, or `CHECKS_INTERVAL` with environment variables as needed.
+The Compose template lists all runtime environment variables with safe defaults; fill `BOT_TOKEN` and `ADMIN_IDS` to enable Telegram.
 
 ## Availability checks
 
