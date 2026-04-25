@@ -35,6 +35,7 @@ npm run build
 - Use `ADMIN_IDS` from `.env` for Telegram admin authorization.
 - Use JSON storage instead of a database.
 - Serve built frontend from `web/dist` through the Go server.
+- Docker image builds the Svelte frontend, embeds `web/dist`, runs the Go server as a non-root user, and uses `/app/data/state.json` plus `/app/checks.json` by default.
 - Keep bug reports unauthenticated, with in-memory IP rate limiting.
 - Keep availability check results live-only; do not persist them in `data/state.json`.
 - Use HTTP(S) GET from the Go server for availability checks, not browser-side checks or ICMP ping.

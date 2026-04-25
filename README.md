@@ -17,6 +17,24 @@ Open http://localhost:8080.
 
 If `BOT_TOKEN` is empty, the HTTP server still runs and Telegram integration is disabled.
 
+## Docker image
+
+The GitHub Actions release workflow publishes an image to GitHub Container Registry:
+
+```text
+ghcr.io/<owner>/<repo>:deploy-latest
+ghcr.io/<owner>/<repo>:sha-<commit>
+```
+
+Run it locally with a mounted data directory:
+
+```sh
+docker run --rm -p 8080:8080 -v "$(pwd)/data:/app/data" ghcr.io/<owner>/<repo>:deploy-latest
+```
+
+The image includes the built frontend and the default `checks.json`.
+Override `BOT_TOKEN`, `ADMIN_IDS`, `PUBLIC_BASE_URL`, or `CHECKS_INTERVAL` with environment variables as needed.
+
 ## Availability checks
 
 The availability block is the primary service health signal.
