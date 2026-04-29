@@ -88,9 +88,40 @@ func TestPublishStatusAnnouncementDoesNotChangeStoredStatus(t *testing.T) {
 	}
 }
 
+func TestPublishChatMessageAddsAdminChatAnnouncement(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := &Bot{store: st}
+
+	ann, err := b.publishChatMessage("Проверяем ваше сообщение")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	snap := st.Snapshot()
+	if snap.Status.State != store.StatusOK {
+		t.Fatalf("status = %q, want %q", snap.Status.State, store.StatusOK)
+	}
+	if len(snap.Announcements) != 1 {
+		t.Fatalf("announcements = %d, want 1", len(snap.Announcements))
+	}
+	if snap.Announcements[0].ID != ann.ID {
+		t.Fatalf("announcement ID = %q, want %q", snap.Announcements[0].ID, ann.ID)
+	}
+	if snap.Announcements[0].Kind != store.AnnouncementAdminChat {
+		t.Fatalf("announcement kind = %q, want %q", snap.Announcements[0].Kind, store.AnnouncementAdminChat)
+	}
+	if snap.Announcements[0].CreatedBy != adminChatSignature {
+		t.Fatalf("createdBy = %q, want %q", snap.Announcements[0].CreatedBy, adminChatSignature)
+	}
+}
+
 func TestHelpTextIncludesPinnedInfoCommands(t *testing.T) {
 	text := helpText()
 	for _, want := range []string{
+		"/chat текст сообщения",
 		"/info текст постоянного блока",
 		"/clearinfo",
 	} {

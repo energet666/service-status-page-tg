@@ -31,6 +31,7 @@ const (
 	AnnouncementResolved    AnnouncementKind = "resolved"
 	AnnouncementCleared     AnnouncementKind = "cleared"
 	AnnouncementUser        AnnouncementKind = "user"
+	AnnouncementAdminChat   AnnouncementKind = "admin_chat"
 )
 
 type Status struct {

@@ -43,6 +43,7 @@ npm run build
 - Use HTTP(S) GET from the Go server for availability checks, not browser-side checks or ICMP ping.
 - Store the availability panel open/closed state in browser `localStorage`.
 - Admin announcements are separate from service health. Use `/announce`, `/maintenance`, and `/incident` for active announcements, and `/clear` to remove the active announcement while recording the clear action in the chat.
+- Telegram admins can use `/chat` to publish a status-chat message signed `Админ`; these messages do not affect the active announcement block or public status.
 - A separate persistent info block can be managed via Telegram with `/info` and `/clearinfo`; it is shown at the top of the page and is not part of the announcement feed.
 - Availability check errors should be human-readable in the UI; do not expose raw transport error strings for common timeout, DNS, or connection failures.
 - Background availability alerts notify Telegram admins when a problem appears or changes, and notify once when all targets recover. Manual UI checks do not affect monitor state.

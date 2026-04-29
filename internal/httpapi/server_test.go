@@ -194,6 +194,9 @@ func TestGetStatusFallsBackToLatestAdminAnnouncementWithoutChecks(t *testing.T) 
 	if _, err := st.AddAnnouncement("Пользовательское сообщение", store.AnnouncementUser, "user"); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := st.AddAnnouncement("Ответ администратора", store.AnnouncementAdminChat, "Админ"); err != nil {
+		t.Fatal(err)
+	}
 	handler := New(st, nil, nil, filepath.Join(t.TempDir(), "dist"))
 	req := httptest.NewRequest(http.MethodGet, "/api/status", nil)
 	res := httptest.NewRecorder()

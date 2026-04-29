@@ -292,6 +292,7 @@
 
   function announcementClass(kind) {
     if (kind === 'user') return 'border-info/45 border-l-info bg-info/5';
+    if (kind === 'admin_chat') return 'border-secondary/45 border-l-secondary bg-secondary/5';
     if (kind === 'maintenance') return 'border-warning/45 border-l-warning bg-warning/5';
     if (kind === 'incident') return 'border-error/45 border-l-error bg-error/5';
     if (kind === 'cleared') return 'border-base-300/70 border-l-base-content/25 bg-base-200/35';
@@ -319,6 +320,7 @@
 
   function announcementLabel(kind) {
     if (kind === 'user') return 'Сообщение пользователя';
+    if (kind === 'admin_chat') return 'Сообщение администратора';
     if (kind === 'maintenance') return 'Обслуживание';
     if (kind === 'incident') return 'Инцидент';
     if (kind === 'cleared') return 'Объявление снято';
@@ -327,7 +329,7 @@
   }
 
   function userDisplayName(announcement) {
-    if (announcement.kind !== 'user') return '';
+    if (announcement.kind !== 'user' && announcement.kind !== 'admin_chat') return '';
     return announcement.createdBy && announcement.createdBy !== 'user' ? announcement.createdBy : 'Анонимно';
   }
 </script>
@@ -608,13 +610,13 @@
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div class="min-w-0">
                     <div class="mb-2 flex flex-wrap items-center gap-2">
-                      {#if announcement.kind === 'user'}
-                        <MessageSquareText class="size-4 text-info" />
+                      {#if announcement.kind === 'user' || announcement.kind === 'admin_chat'}
+                        <MessageSquareText class={`size-4 ${announcement.kind === 'admin_chat' ? 'text-secondary' : 'text-info'}`} />
                       {/if}
-                      <span class={`badge badge-sm rounded-lg ${announcement.kind === 'user' ? 'badge-info' : 'badge-ghost'}`}>
+                      <span class={`badge badge-sm rounded-lg ${announcement.kind === 'user' ? 'badge-info' : announcement.kind === 'admin_chat' ? 'badge-secondary' : 'badge-ghost'}`}>
                         {announcementLabel(announcement.kind)}
                       </span>
-                      {#if announcement.kind === 'user'}
+                      {#if announcement.kind === 'user' || announcement.kind === 'admin_chat'}
                         <span class="text-sm font-medium text-base-content/65">{userDisplayName(announcement)}</span>
                       {/if}
                     </div>

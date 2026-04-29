@@ -72,9 +72,12 @@ Use `/clear` when the announcement is no longer relevant; the clear action is re
 
 ```text
 /announce текст объявления
+/chat текст сообщения
 /maintenance [текст объявления]
 /incident [текст объявления]
+/info текст постоянного блока
 /clear [текст записи]
+/clearinfo
 /delete_last
 /list
 /help
@@ -82,4 +85,5 @@ Use `/clear` when the announcement is no longer relevant; the clear action is re
 
 Announcements have three visible types: plain, maintenance, and incident.
 They do not directly set the service health badge; availability checks do that.
+Messages sent with `/chat` are shown in the status chat as `Админ` and do not affect the active announcement.
 Only Telegram user ids from `ADMIN_IDS` can use admin commands.

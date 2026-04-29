@@ -18,6 +18,7 @@ const (
 	defaultMaintenanceStatusMessage = "Сервис временно на техническом обслуживании"
 	defaultIncidentStatusMessage    = "В работе сервиса наблюдаются проблемы"
 	defaultClearMessage             = "Объявление снято"
+	adminChatSignature              = "Админ"
 )
 
 var noPreview = &tele.SendOptions{
@@ -109,6 +110,7 @@ func (b *Bot) registerHandlers() {
 	b.bot.Handle("/maintenance", b.adminOnly(b.handleStatusAnnouncement(store.AnnouncementMaintenance, "/maintenance", defaultMaintenanceStatusMessage)))
 	b.bot.Handle("/incident", b.adminOnly(b.handleStatusAnnouncement(store.AnnouncementIncident, "/incident", defaultIncidentStatusMessage)))
 	b.bot.Handle("/announce", b.adminOnly(b.handleAnnounce))
+	b.bot.Handle("/chat", b.adminOnly(b.handleChatMessage))
 	b.bot.Handle("/info", b.adminOnly(b.handlePinnedInfo))
 	b.bot.Handle("/clear", b.adminOnly(b.handleClear))
 	b.bot.Handle("/clearinfo", b.adminOnly(b.handleClearPinnedInfo))
@@ -119,6 +121,7 @@ func (b *Bot) registerHandlers() {
 func (b *Bot) syncCommands() {
 	commands := []tele.Command{
 		{Text: "announce", Description: "Опубликовать обычное объявление"},
+		{Text: "chat", Description: "Отправить сообщение в чат"},
 		{Text: "maintenance", Description: "Опубликовать объявление о работах"},
 		{Text: "incident", Description: "Опубликовать объявление об инциденте"},
 		{Text: "info", Description: "Обновить постоянный инфо-блок"},
@@ -176,6 +179,21 @@ func (b *Bot) handleAnnounce(c tele.Context) error {
 		return c.Send("Не удалось сохранить объявление.")
 	}
 	return c.Send("Объявление опубликовано.")
+}
+
+func (b *Bot) handleChatMessage(c tele.Context) error {
+	message := strings.TrimSpace(c.Message().Payload)
+	if message == "" {
+		return c.Send("Использование: /chat текст сообщения")
+	}
+	if _, err := b.publishChatMessage(message); err != nil {
+		return c.Send("Не удалось отправить сообщение.")
+	}
+	return c.Send("Сообщение отправлено в чат.")
+}
+
+func (b *Bot) publishChatMessage(message string) (store.Announcement, error) {
+	return b.store.AddAnnouncement(message, store.AnnouncementAdminChat, adminChatSignature)
 }
 
 func (b *Bot) handlePinnedInfo(c tele.Context) error {
@@ -266,6 +284,7 @@ func ParseStatusMessage(payload, command string, defaultMessage ...string) (stri
 func helpText() string {
 	return strings.Join([]string{
 		"/announce текст объявления",
+		"/chat текст сообщения",
 		"/maintenance [текст объявления]",
 		"/incident [текст объявления]",
 		"/info текст постоянного блока",
