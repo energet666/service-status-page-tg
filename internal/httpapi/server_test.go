@@ -422,7 +422,24 @@ func TestCreateReportRequiresMessage(t *testing.T) {
 }
 
 func TestCreateReportRejectsReservedAdminNames(t *testing.T) {
-	for _, name := range []string{"admin", "Admin", "ADMIN", "админ", "Админ", "АДМИН"} {
+	for _, name := range []string{
+		"admin",
+		"Admin",
+		"ADMIN",
+		"админ",
+		"Админ",
+		"АДМИН",
+		"administrator",
+		"Administrator",
+		"администратор",
+		"Администратор",
+		"moderator",
+		"модератор",
+		"support",
+		"поддержка",
+		"служба поддержки",
+		"Служба поддержки",
+	} {
 		t.Run(name, func(t *testing.T) {
 			handler := newTestHandler(t, nil)
 			req := httptest.NewRequest(http.MethodPost, "/api/reports", bytes.NewBufferString(`{"message":"bug","name":"`+name+`"}`))

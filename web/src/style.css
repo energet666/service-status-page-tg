@@ -78,6 +78,29 @@ textarea {
   animation: toast-in 180ms ease-out;
 }
 
+.admin-name-shine {
+  display: inline-block;
+  color: #dce8ee;
+  background:
+    linear-gradient(
+      110deg,
+      #7d8a91 0%,
+      #f7fbff 18%,
+      #a8b6bf 31%,
+      #eef7fb 43%,
+      #73818a 56%,
+      #ffffff 66%,
+      #9eabb3 78%,
+      #dce8ee 100%
+    );
+  background-size: 260% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 0.35rem rgba(125, 211, 252, 0.22));
+  animation: steel-shine 2.8s ease-in-out infinite;
+}
+
 @keyframes toast-in {
   from {
     opacity: 0;
@@ -90,8 +113,27 @@ textarea {
   }
 }
 
+@keyframes steel-shine {
+  0%,
+  18% {
+    background-position: 140% 0;
+  }
+
+  55% {
+    background-position: -80% 0;
+  }
+
+  100% {
+    background-position: -80% 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .toast-card {
+    animation: none;
+  }
+
+  .admin-name-shine {
     animation: none;
   }
 }

@@ -16,7 +16,17 @@
 
   const savedNameKey = 'service-status-page.reportName';
   const checksOpenKey = 'service-status-page.checksOpen';
-  const reservedReportNames = new Set(['admin', 'админ']);
+  const reservedReportNames = new Set([
+    'admin',
+    'админ',
+    'administrator',
+    'администратор',
+    'moderator',
+    'модератор',
+    'support',
+    'поддержка',
+    'служба поддержки'
+  ]);
 
   let status = $state(null);
   let pinnedInfo = $state(null);
@@ -37,6 +47,7 @@
   let submitError = $state('');
   let toastMessage = $state('');
   let toastTimer;
+  let savedNameLoaded = false;
   let form = $state({
     message: '',
     name: '',
@@ -156,6 +167,9 @@
   }
 
   function loadSavedName() {
+    if (savedNameLoaded) return;
+    savedNameLoaded = true;
+
     try {
       const savedName = localStorage.getItem(savedNameKey);
       if (savedName && !form.name) {
@@ -617,7 +631,7 @@
                         {announcementLabel(announcement.kind)}
                       </span>
                       {#if announcement.kind === 'user' || announcement.kind === 'admin_chat'}
-                        <span class="text-sm font-medium text-base-content/65">{userDisplayName(announcement)}</span>
+                        <span class={`text-sm font-medium ${announcement.kind === 'admin_chat' ? 'admin-name-shine' : 'text-base-content/65'}`}>{userDisplayName(announcement)}</span>
                       {/if}
                     </div>
                     <p class="break-words leading-relaxed">{announcement.message}</p>

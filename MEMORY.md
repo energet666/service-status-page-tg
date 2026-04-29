@@ -38,7 +38,7 @@ npm run build
 - Docker image builds the Svelte frontend, embeds `web/dist`, runs the Go server as a non-root user, and uses `/app/data/state.json` plus `/app/checks.json` by default.
 - `docker-compose.example.yml` is a deploy template for the GHCR image with `./data:/app/data` persistence, no `env_file`, and all runtime env vars listed with safe defaults.
 - Keep bug reports unauthenticated, with in-memory IP rate limiting.
-- Bug report names `admin` and `админ` are reserved case-insensitively and rejected on both the API and frontend.
+- Misleading bug report names are reserved case-insensitively and rejected on both the API and frontend, including admin/administrator/moderator/support variants in Russian and English.
 - Keep availability check results live-only; do not persist them in `data/state.json`.
 - Use HTTP(S) GET from the Go server for availability checks, not browser-side checks or ICMP ping.
 - Store the availability panel open/closed state in browser `localStorage`.
@@ -51,6 +51,8 @@ npm run build
 ## Recent Fixes
 
 - The bug report form initially rendered labels and fields in a broken horizontal layout because daisyUI 5 did not apply the expected `form-control` behavior. It was fixed in `web/src/App.svelte` by using explicit `flex flex-col gap-*` layout classes and `w-full` on fields.
+- Saved bug-report names are loaded from browser storage only once per page session, so manually clearing the name field does not immediately restore the saved value.
+- Admin chat signatures use a subtle animated steel-shine text treatment so `Админ` is visually distinct from user names.
 - The availability checks block was added to `web/src/App.svelte` and then made collapsible with persisted browser state.
 - The availability block header now shows the overall check state and remains readable on narrow screens.
 - Background availability monitoring and Telegram alerts were added, including recovery notifications after outages.

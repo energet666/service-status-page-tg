@@ -184,7 +184,17 @@ func (s *Server) handleCreateReport(w http.ResponseWriter, r *http.Request) {
 }
 
 func isReservedReportName(name string) bool {
-	for _, reserved := range []string{"admin", "админ"} {
+	for _, reserved := range []string{
+		"admin",
+		"админ",
+		"administrator",
+		"администратор",
+		"moderator",
+		"модератор",
+		"support",
+		"поддержка",
+		"служба поддержки",
+	} {
 		if strings.EqualFold(name, reserved) {
 			return true
 		}
