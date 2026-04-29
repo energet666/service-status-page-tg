@@ -79,26 +79,29 @@ textarea {
 }
 
 .admin-name-shine {
+  position: relative;
   display: inline-block;
   color: #dce8ee;
-  background:
-    linear-gradient(
-      110deg,
-      #7d8a91 0%,
-      #f7fbff 18%,
-      #a8b6bf 31%,
-      #eef7fb 43%,
-      #73818a 56%,
-      #ffffff 66%,
-      #9eabb3 78%,
-      #dce8ee 100%
-    );
-  background-size: 260% 100%;
+  background: linear-gradient(180deg, #f4f8fb 0%, #a9b5bc 45%, #eef5f8 56%, #7d8a91 100%);
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   filter: drop-shadow(0 0 0.35rem rgba(125, 211, 252, 0.22));
-  animation: steel-shine 2.8s ease-in-out infinite;
+}
+
+.admin-name-shine::after {
+  position: absolute;
+  inset: 0;
+  content: attr(data-text);
+  color: transparent;
+  background: linear-gradient(100deg, transparent 0%, transparent 42%, #ffffff 50%, transparent 58%, transparent 100%);
+  background-size: 220% 100%;
+  background-position: 160% 0;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  pointer-events: none;
+  animation: steel-shine 4s linear infinite;
 }
 
 @keyframes toast-in {
@@ -114,17 +117,20 @@ textarea {
 }
 
 @keyframes steel-shine {
-  0%,
-  18% {
-    background-position: 140% 0;
+  0% {
+    background-position: 160% 0;
+    opacity: 1;
   }
 
-  55% {
-    background-position: -80% 0;
+  50% {
+    background-position: -160% 0;
+    opacity: 1;
   }
 
+  50.01%,
   100% {
-    background-position: -80% 0;
+    background-position: -160% 0;
+    opacity: 0;
   }
 }
 

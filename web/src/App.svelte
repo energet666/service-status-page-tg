@@ -631,7 +631,8 @@
                         {announcementLabel(announcement.kind)}
                       </span>
                       {#if announcement.kind === 'user' || announcement.kind === 'admin_chat'}
-                        <span class={`text-sm font-medium ${announcement.kind === 'admin_chat' ? 'admin-name-shine' : 'text-base-content/65'}`}>{userDisplayName(announcement)}</span>
+                        {@const displayName = userDisplayName(announcement)}
+                        <span class={`text-sm font-medium ${announcement.kind === 'admin_chat' ? 'admin-name-shine' : 'text-base-content/65'}`} data-text={displayName}>{displayName}</span>
                       {/if}
                     </div>
                     <p class="break-words leading-relaxed">{announcement.message}</p>
