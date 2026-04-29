@@ -418,6 +418,22 @@ func TestCreateReportRequiresMessage(t *testing.T) {
 	}
 }
 
+func TestCreateReportRejectsReservedAdminNames(t *testing.T) {
+	for _, name := range []string{"admin", "Admin", "ADMIN", "админ", "Админ", "АДМИН"} {
+		t.Run(name, func(t *testing.T) {
+			handler := newTestHandler(t, nil)
+			req := httptest.NewRequest(http.MethodPost, "/api/reports", bytes.NewBufferString(`{"message":"bug","name":"`+name+`"}`))
+			res := httptest.NewRecorder()
+
+			handler.ServeHTTP(res, req)
+
+			if res.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d", res.Code, http.StatusBadRequest)
+			}
+		})
+	}
+}
+
 func TestCreateReportRateLimit(t *testing.T) {
 	handler := newTestHandler(t, nil)
 

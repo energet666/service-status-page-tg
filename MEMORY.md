@@ -38,6 +38,7 @@ npm run build
 - Docker image builds the Svelte frontend, embeds `web/dist`, runs the Go server as a non-root user, and uses `/app/data/state.json` plus `/app/checks.json` by default.
 - `docker-compose.example.yml` is a deploy template for the GHCR image with `./data:/app/data` persistence, no `env_file`, and all runtime env vars listed with safe defaults.
 - Keep bug reports unauthenticated, with in-memory IP rate limiting.
+- Bug report names `admin` and `админ` are reserved case-insensitively and rejected on both the API and frontend.
 - Keep availability check results live-only; do not persist them in `data/state.json`.
 - Use HTTP(S) GET from the Go server for availability checks, not browser-side checks or ICMP ping.
 - Store the availability panel open/closed state in browser `localStorage`.

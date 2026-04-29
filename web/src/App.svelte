@@ -16,6 +16,7 @@
 
   const savedNameKey = 'service-status-page.reportName';
   const checksOpenKey = 'service-status-page.checksOpen';
+  const reservedReportNames = new Set(['admin', 'админ']);
 
   let status = $state(null);
   let pinnedInfo = $state(null);
@@ -125,6 +126,11 @@
     }
 
     const submittedName = form.name.trim();
+    if (isReservedReportName(submittedName)) {
+      submitError = 'Выберите другое имя';
+      return;
+    }
+
     submitting = true;
     try {
       await readJSON(
@@ -143,6 +149,10 @@
     } finally {
       submitting = false;
     }
+  }
+
+  function isReservedReportName(name) {
+    return reservedReportNames.has(name.toLocaleLowerCase());
   }
 
   function loadSavedName() {

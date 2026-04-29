@@ -154,6 +154,10 @@ func (s *Server) handleCreateReport(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Опишите проблему")
 		return
 	}
+	if isReservedReportName(input.Name) {
+		writeError(w, http.StatusBadRequest, "Выберите другое имя")
+		return
+	}
 
 	report, err := s.store.AddReport(store.Report{
 		Message:   input.Message,
@@ -177,6 +181,15 @@ func (s *Server) handleCreateReport(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"report": report,
 	})
+}
+
+func isReservedReportName(name string) bool {
+	for _, reserved := range []string{"admin", "админ"} {
+		if strings.EqualFold(name, reserved) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) statusResponse(ctx context.Context) map[string]any {
