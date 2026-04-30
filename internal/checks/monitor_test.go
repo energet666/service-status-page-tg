@@ -41,7 +41,7 @@ func (f *fakeAvailabilityNotifier) NotifyAvailabilityRecovered(results []Result)
 
 func TestMonitorNotifiesOnNewProblemOnly(t *testing.T) {
 	down := []Result{{Name: "Broken", URL: "https://broken.example/", State: StateDown, Error: "timeout"}}
-	checker := &fakeMonitorChecker{results: [][]Result{down, down}}
+	checker := &fakeMonitorChecker{results: [][]Result{down, down, down}}
 	notifier := &fakeAvailabilityNotifier{}
 	monitor := NewMonitor(checker, notifier, time.Minute)
 
@@ -56,7 +56,9 @@ func TestMonitorNotifiesOnNewProblemOnly(t *testing.T) {
 func TestMonitorNotifiesRecoveryAndThenNewProblem(t *testing.T) {
 	checker := &fakeMonitorChecker{results: [][]Result{
 		{{Name: "Broken", URL: "https://broken.example/", State: StateDown, Error: "timeout"}},
+		{{Name: "Broken", URL: "https://broken.example/", State: StateDown, Error: "timeout"}},
 		{{Name: "Broken", URL: "https://broken.example/", State: StateUp}},
+		{{Name: "Broken", URL: "https://broken.example/", State: StateDown, Error: "timeout"}},
 		{{Name: "Broken", URL: "https://broken.example/", State: StateDown, Error: "timeout"}},
 	}}
 	notifier := &fakeAvailabilityNotifier{}
@@ -77,6 +79,24 @@ func TestMonitorNotifiesRecoveryAndThenNewProblem(t *testing.T) {
 func TestMonitorDoesNotNotifyWhenAllTargetsAreUp(t *testing.T) {
 	checker := &fakeMonitorChecker{results: [][]Result{
 		{{Name: "OK", URL: "https://ok.example/", State: StateUp}},
+	}}
+	notifier := &fakeAvailabilityNotifier{}
+	monitor := NewMonitor(checker, notifier, time.Minute)
+
+	monitor.CheckNow(context.Background())
+
+	if notifier.problemCalls != 0 {
+		t.Fatalf("problem notifier calls = %d, want 0", notifier.problemCalls)
+	}
+	if notifier.recoveryCalls != 0 {
+		t.Fatalf("recovery notifier calls = %d, want 0", notifier.recoveryCalls)
+	}
+}
+
+func TestMonitorSkipsProblemNotificationWhenRetrySucceeds(t *testing.T) {
+	checker := &fakeMonitorChecker{results: [][]Result{
+		{{Name: "Flaky", URL: "https://flaky.example/", State: StateDown, Error: "timeout"}},
+		{{Name: "Flaky", URL: "https://flaky.example/", State: StateUp}},
 	}}
 	notifier := &fakeAvailabilityNotifier{}
 	monitor := NewMonitor(checker, notifier, time.Minute)
