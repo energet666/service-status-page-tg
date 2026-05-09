@@ -141,7 +141,7 @@ func (c *Checker) checkOne(ctx context.Context, target Target) Result {
 	result.LatencyMs = latencyMs(start, checkedAt)
 
 	result.StatusCode = res.StatusCode
-	if res.StatusCode >= 200 && res.StatusCode < 400 {
+	if isReachableStatus(res.StatusCode) {
 		result.State = StateUp
 		return result
 	}
@@ -149,6 +149,13 @@ func (c *Checker) checkOne(ctx context.Context, target Target) Result {
 	result.State = StateHTTPError
 	result.Error = res.Status
 	return result
+}
+
+func isReachableStatus(statusCode int) bool {
+	if statusCode >= 200 && statusCode < 400 {
+		return true
+	}
+	return statusCode == http.StatusTooManyRequests
 }
 
 func humanError(err error) string {
