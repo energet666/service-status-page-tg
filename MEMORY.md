@@ -48,6 +48,8 @@ npm run build
 - Availability check errors should be human-readable in the UI; do not expose raw transport error strings for common timeout, DNS, or connection failures.
 - Background availability alerts notify Telegram admins when a problem appears or changes, and notify once when all targets recover. Manual UI checks do not affect monitor state.
 
+- HTTP 429 (`Too Many Requests`) from availability targets is treated as reachable (`up`) so rate limits do not trigger false outage alerts when the goal is detecting blocks/filters.
+
 ## Recent Fixes
 
 - The bug report form initially rendered labels and fields in a broken horizontal layout because daisyUI 5 did not apply the expected `form-control` behavior. It was fixed in `web/src/App.svelte` by using explicit `flex flex-col gap-*` layout classes and `w-full` on fields.

@@ -76,6 +76,7 @@ func TestCheckerStates(t *testing.T) {
 	}{
 		{name: "up", statusCode: http.StatusNoContent, wantState: StateUp},
 		{name: "redirect", statusCode: http.StatusFound, wantState: StateUp},
+		{name: "rate limited", statusCode: http.StatusTooManyRequests, wantState: StateUp},
 		{name: "http error", statusCode: http.StatusServiceUnavailable, wantState: StateHTTPError},
 	}
 
