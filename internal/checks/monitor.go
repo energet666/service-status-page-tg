@@ -69,8 +69,23 @@ func (m *Monitor) CheckNow(ctx context.Context) {
 		return
 	}
 
-	m.lastProblemKey = key
-	if err := m.notifier.NotifyAvailabilityProblems(results); err != nil {
+	confirmedResults := m.checker.Check(ctx)
+	confirmedKey := problemKey(confirmedResults)
+	if confirmedKey == "" {
+		if m.lastProblemKey != "" {
+			if err := m.notifier.NotifyAvailabilityRecovered(confirmedResults); err != nil {
+				log.Printf("failed to send availability recovery alert: %v", err)
+			}
+		}
+		m.lastProblemKey = ""
+		return
+	}
+	if confirmedKey == m.lastProblemKey {
+		return
+	}
+
+	m.lastProblemKey = confirmedKey
+	if err := m.notifier.NotifyAvailabilityProblems(confirmedResults); err != nil {
 		log.Printf("failed to send availability alert: %v", err)
 	}
 }
